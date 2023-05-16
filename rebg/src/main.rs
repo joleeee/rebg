@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    process::{Command, Stdio},
+    process::{exit, Command, Stdio},
 };
 
 use capstone::prelude::BuildsCapstone;
@@ -50,6 +50,15 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
     println!("Starting qemu");
     // todo spawn new thread
     let result = run.wait_with_output().unwrap();
+
+    if !result.status.success() {
+        println!(
+            "QEMU Failed with code {} and err \"{}\"",
+            result.status.code().unwrap(),
+            String::from_utf8(result.stderr).unwrap().trim()
+        );
+        exit(1);
+    }
 
     let output = String::from_utf8(result.stderr).unwrap();
 
