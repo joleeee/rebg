@@ -1,4 +1,7 @@
-use std::process::{Command, Stdio};
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use capstone::prelude::BuildsCapstone;
 
@@ -24,7 +27,14 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
     cp.wait_with_output().unwrap();
 
     // run qemu inside the container
-    let guest_path = format!("/container/{}", program);
+    let guest_path = format!(
+        "/container/{}",
+        PathBuf::from(program)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
     let run = Command::new("docker")
         .arg("exec")
         .arg(id)
@@ -135,7 +145,7 @@ fn spawn_runner() -> String {
 
 fn main() {
     let id = spawn_runner();
-    let trace = run_qemu(&id, "linux-ls");
+    let trace = run_qemu(&id, "../bins/ls-arm64");
 
     let cs = capstone::Capstone::new()
         .arm64()
