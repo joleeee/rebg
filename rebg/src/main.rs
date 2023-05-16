@@ -1,5 +1,7 @@
 use std::process::{Command, Stdio};
 
+use capstone::prelude::BuildsCapstone;
+
 struct Step<A, C, M> {
     address: A,
     code: C,
@@ -134,12 +136,26 @@ fn spawn_runner() -> String {
 fn main() {
     let id = spawn_runner();
     let trace = run_qemu(&id, "linux-ls");
+
+    let cs = capstone::Capstone::new()
+        .arm64()
+        .mode(capstone::arch::arm64::ArchMode::Arm)
+        .detail(true)
+        .build()
+        .unwrap();
+
     for Step {
         address,
         code,
-        mnemonic,
+        mnemonic: _,
     } in trace
     {
-        println!("0x{:016x}: {:08x} {}", address, code, mnemonic);
+        let disasm = cs.disasm_all(&code.to_le_bytes(), address).unwrap();
+        assert_eq!(disasm.len(), 1);
+        let disasm = disasm.first().unwrap();
+        let dis_mn = disasm.mnemonic().unwrap();
+        let dis_op = disasm.op_str().unwrap();
+
+        println!("0x{:016x}: {:08x} {} {}", address, code, dis_mn, dis_op);
     }
 }
