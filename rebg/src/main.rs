@@ -143,9 +143,19 @@ fn spawn_runner() -> String {
     id
 }
 
+#[derive(argh::FromArgs)]
+/// tracer
+struct Arguments {
+    /// the program to trace
+    #[argh(positional)]
+    program: String,
+}
+
 fn main() {
+    let Arguments { program } = argh::from_env();
+
     let id = spawn_runner();
-    let trace = run_qemu(&id, "../bins/ls-arm64");
+    let trace = run_qemu(&id, &program);
 
     let cs = capstone::Capstone::new()
         .arm64()
