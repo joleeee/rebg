@@ -1,10 +1,15 @@
-use std::{
-    os::unix::process::CommandExt,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::process::{Command, Stdio};
 
-fn run_qemu(id: &str, program: &str) {
+struct Step<A, C, M> {
+    address: A,
+    code: C,
+    mnemonic: M,
+}
+
+// define ARM64Step as a Step
+type ARM64Step = Step<u64, u32, String>;
+
+fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
     // copy program into container
     //let mut copy = Command::new("docker").arg("cp").arg(program).arg(format!("{}:/{}", id, program)).spawn().unwrap();
 
@@ -35,13 +40,44 @@ fn run_qemu(id: &str, program: &str) {
     let result = run.wait_with_output().unwrap();
 
     let output = String::from_utf8(result.stderr).unwrap();
-    
-    println!("{}", output);
-    
-    let lines = output.split("\n").into_iter().filter(|x| x.starts_with("0x")).collect::<Vec<&str>>();
+
+    let lines = output
+        .split("\n")
+        .into_iter()
+        .filter(|x| x.starts_with("0x"));
+
+    let mut steps = Vec::new();
+
     for line in lines {
-        println!("{}", line);
+        let mut parts = line.split_ascii_whitespace();
+
+        // text
+        let address = parts
+            .next()
+            .unwrap()
+            .strip_suffix(':')
+            .unwrap()
+            .strip_prefix("0x")
+            .unwrap();
+        let inst_data = parts.next().unwrap();
+        let inst_mnem = parts.next().unwrap();
+
+        // binary
+        let address = u64::from_str_radix(address, 16).unwrap();
+        // x86 can have 15 byte long instructions
+        // lets just do arm64 for now...
+        let inst_data = u32::from_str_radix(inst_data, 16).unwrap();
+
+        let step = ARM64Step {
+            address,
+            code: inst_data,
+            mnemonic: inst_mnem.to_string(),
+        };
+
+        steps.push(step);
     }
+
+    steps
 }
 
 fn spawn_runner() -> String {
@@ -92,5 +128,13 @@ fn spawn_runner() -> String {
 
 fn main() {
     let id = spawn_runner();
-    run_qemu(&id, "linux-ls");
+    let trace = run_qemu(&id, "linux-ls");
+    for Step {
+        address,
+        code,
+        mnemonic,
+    } in trace
+    {
+        println!("0x{:016x}: {:08x} {}", address, code, mnemonic);
+    }
 }
