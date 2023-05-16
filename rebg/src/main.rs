@@ -63,7 +63,7 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
             .strip_prefix("0x")
             .unwrap();
         let inst_data = parts.next().unwrap();
-        let inst_mnem = parts.next().unwrap();
+        let inst_mnem = parts.next().unwrap().trim(); // why do i only have to trim this
 
         assert_eq!(parts.next(), None); // only 3
 
