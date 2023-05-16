@@ -42,7 +42,7 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
     let output = String::from_utf8(result.stderr).unwrap();
 
     let lines = output
-        .split("\n")
+        .split('\n')
         .into_iter()
         .filter(|x| x.starts_with("0x"));
 
