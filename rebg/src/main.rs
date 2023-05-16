@@ -49,7 +49,10 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
     let mut steps = Vec::new();
 
     for line in lines {
-        let mut parts = line.split_ascii_whitespace();
+        // a, _, c, _, m -> a, c, m
+        let mut parts = line
+            .splitn(5, char::is_whitespace)
+            .filter(|x| !x.is_empty());
 
         // text
         let address = parts
@@ -61,6 +64,8 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
             .unwrap();
         let inst_data = parts.next().unwrap();
         let inst_mnem = parts.next().unwrap();
+
+        assert_eq!(parts.next(), None); // only 3
 
         // binary
         let address = u64::from_str_radix(address, 16).unwrap();
