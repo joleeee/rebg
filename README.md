@@ -11,10 +11,11 @@ While performance is not too big of a worry when tracing, it's especially nice
 to have a speedup when building our patched qemu. If you're using macos you can
 decrease your crossplatform buildtime by about 60% (2.4x speedup) by using
 rosetta with docker. In Docker Desktop you can find it under "Features in
-development". For me the speedup was as following on a Macbook Air M2, 10GB of
-ram and 7 cores allocated to docker. There was proably a lot of thermal
-throttling.
+development". For me the speedup was as following on a Macbook Air M2, with
+10GB of ram and 7 cores allocated to docker. There was proably a lot of thermal
+throttling which skewed the results somewhat.
 
+## Informal Benchmark
 ```
 == rosetta ==
 ./configure: 77.7s
@@ -22,7 +23,9 @@ make -j8: 2491.4s
 
 == default (qemu) ==
 ./configure: 188.8s
-make -j8:
+make -j8: ~7900s (killed it at 6500s, with [8206/10015])
 
 == native (macos) ==
+./configure: 21.1s
+make -j8: 244.0s (slightly unfair because 8 cores were actually available)
 ```
