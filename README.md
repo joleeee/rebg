@@ -17,15 +17,19 @@ throttling which skewed the results somewhat.
 
 ## Informal Benchmark
 ```
-== rosetta ==
+== linux x64 (docker emu w/rosetta) ==
 ./configure: 77.7s
 make -j8: 2491.4s
 
-== default (qemu) ==
+== linux x64 (docker emu w/qemu) ==
 ./configure: 188.8s
 make -j8: ~7900s (killed it at 6500s, with [8206/10015])
 
-== native (macos) ==
+== linux arm64 (docker) ==
+./configure: 17.2s
+make -j8: 684.1s
+
+== macos arm64 (native) ==
 ./configure: 21.1s
 make -j8: 244.0s (slightly unfair because 8 cores were actually available)
 ```
