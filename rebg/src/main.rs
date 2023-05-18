@@ -162,9 +162,13 @@ struct Arguments {
     /// architecture: arm, x64, ...
     arch: Arch,
 
-    #[argh(option, short = 'i')]
+    #[argh(option, short = 'i', default = r#"String::from("rebg")"#)]
     /// docker image to use
-    image: Option<String>,
+    image: String,
+
+    #[argh(option, short = 'e')]
+    /// existing container to use
+    container: Option<String>,
 }
 
 enum Arch {
@@ -213,11 +217,14 @@ fn main() {
         program,
         arch,
         image,
+        container,
     } = argh::from_env();
 
-    let image = image.as_deref().unwrap_or("rebg");
-
-    let id = spawn_runner(image);
+    let id = if let Some(container) = container {
+        container
+    } else {
+        spawn_runner(&image)
+    };
 
     let trace = run_qemu(&id, &program, &arch);
 
