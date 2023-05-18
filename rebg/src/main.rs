@@ -38,6 +38,7 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
         .arg("exec")
         .arg(id)
         .arg(arch.qemu_user_bin())
+        .arg("-one-insn-per-tb")
         .args(["-d", "in_asm"])
         .arg(guest_path)
         .stdin(Stdio::null()) // todo pass through from nc
