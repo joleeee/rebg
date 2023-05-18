@@ -5,14 +5,13 @@ use std::{
 
 use capstone::{prelude::BuildsCapstone, Capstone};
 
-struct Step<A, C, M> {
+struct Step<A, C> {
     address: A,
     code: C,
-    mnemonic: M,
 }
 
 // define ARM64Step as a Step
-type ARM64Step = Step<u64, u32, String>;
+type ARM64Step = Step<u64, u32>;
 
 fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     // copy program into container
@@ -65,28 +64,18 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     let lines = output
         .split('\n')
         .into_iter()
-        .filter(|x| x.starts_with("0x"));
+        .filter(|x| x.starts_with("I0x"))
+        .map(|x| x.strip_prefix("I0x"));
 
     let mut steps = Vec::new();
 
     for line in lines {
-        // a, _, c, _, m -> a, c, m
-        let mut parts = line
-            .splitn(5, char::is_whitespace)
-            .filter(|x| !x.is_empty());
+        let mut parts = line.unwrap().split("|");
 
         // text
-        let address = parts
-            .next()
-            .unwrap()
-            .strip_suffix(':')
-            .unwrap()
-            .strip_prefix("0x")
-            .unwrap();
+        let address = parts.next().unwrap();
         let inst_data = parts.next().unwrap();
-        let inst_mnem = parts.next().unwrap().trim(); // why do i only have to trim this
-
-        assert_eq!(parts.next(), None); // only 3
+        assert_eq!(parts.next(), None); // only 2
 
         // binary
         let address = u64::from_str_radix(address, 16).unwrap();
@@ -94,13 +83,10 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
         // lets just do arm64 for now...
         let inst_data = u32::from_str_radix(inst_data, 16).unwrap();
 
-        let step = ARM64Step {
+        steps.push(ARM64Step {
             address,
             code: inst_data,
-            mnemonic: inst_mnem.to_string(),
-        };
-
-        steps.push(step);
+        });
     }
 
     steps
@@ -231,13 +217,8 @@ fn main() {
 
     let cs = arch.make_capstone().unwrap();
 
-    for Step {
-        address,
-        code,
-        mnemonic: _,
-    } in trace
-    {
-        let disasm = cs.disasm_all(&code.to_le_bytes(), address).unwrap();
+    for Step { address, code } in trace {
+        let disasm = cs.disasm_all(&code.to_be_bytes(), address).unwrap();
         assert_eq!(disasm.len(), 1);
         let disasm = disasm.first().unwrap();
         let dis_mn = disasm.mnemonic().unwrap();
