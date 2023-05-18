@@ -3,7 +3,7 @@ use std::{
     process::{exit, Command, Stdio},
 };
 
-use capstone::prelude::BuildsCapstone;
+use capstone::{prelude::BuildsCapstone, Capstone};
 
 struct Step<A, C, M> {
     address: A,
@@ -14,9 +14,8 @@ struct Step<A, C, M> {
 // define ARM64Step as a Step
 type ARM64Step = Step<u64, u32, String>;
 
-fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
+fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     // copy program into container
-    //let mut copy = Command::new("docker").arg("cp").arg(program).arg(format!("{}:/{}", id, program)).spawn().unwrap();
 
     // just copy it into the `container` folder
     let cp = Command::new("cp")
@@ -38,7 +37,7 @@ fn run_qemu(id: &str, program: &str) -> Vec<ARM64Step> {
     let run = Command::new("docker")
         .arg("exec")
         .arg(id)
-        .arg("qemu-aarch64")
+        .arg(arch.qemu_user_bin())
         .args(["-d", "in_asm"])
         .arg(guest_path)
         .stdin(Stdio::null()) // todo pass through from nc
@@ -158,20 +157,60 @@ struct Arguments {
     /// the program to trace
     #[argh(positional)]
     program: String,
+
+    #[argh(positional)]
+    /// architecture: arm, x64, ...
+    arch: Arch,
+}
+
+enum Arch {
+    ARM64,
+    X86_64,
+}
+
+impl argh::FromArgValue for Arch {
+    fn from_arg_value(value: &str) -> Result<Self, String> {
+        match value {
+            "arm64" | "arm" => Ok(Arch::ARM64),
+            "x86_64" | "amd64" | "amd" | "x64" => Ok(Arch::X86_64),
+            _ => Err(format!("Unknown arch: {}", value)),
+        }
+    }
+}
+
+impl Arch {
+    fn make_capstone(&self) -> Result<Capstone, capstone::Error> {
+        let cs = Capstone::new();
+
+        match self {
+            Arch::ARM64 => cs
+                .arm64()
+                .mode(capstone::arch::arm64::ArchMode::Arm)
+                .detail(true)
+                .build(),
+            Arch::X86_64 => cs
+                .x86()
+                .mode(capstone::arch::x86::ArchMode::Mode64)
+                .detail(true)
+                .build(),
+        }
+    }
+
+    fn qemu_user_bin(&self) -> &str {
+        match self {
+            Arch::ARM64 => "qemu-aarch64",
+            Arch::X86_64 => "qemu-x86_64",
+        }
+    }
 }
 
 fn main() {
-    let Arguments { program } = argh::from_env();
+    let Arguments { program, arch } = argh::from_env();
 
     let id = spawn_runner();
-    let trace = run_qemu(&id, &program);
+    let trace = run_qemu(&id, &program, &arch);
 
-    let cs = capstone::Capstone::new()
-        .arm64()
-        .mode(capstone::arch::arm64::ArchMode::Arm)
-        .detail(true)
-        .build()
-        .unwrap();
+    let cs = arch.make_capstone().unwrap();
 
     for Step {
         address,
