@@ -105,7 +105,7 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     steps
 }
 
-fn spawn_runner() -> String {
+fn spawn_runner(image_name: &str) -> String {
     // stop any previous container
     let mut stop = Command::new("docker")
         .arg("kill")
@@ -137,7 +137,7 @@ fn spawn_runner() -> String {
             "-v={}/container:/container",
             std::env::current_dir().unwrap().to_str().unwrap()
         ))
-        .arg("rebg")
+        .arg(image_name)
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
@@ -161,6 +161,10 @@ struct Arguments {
     #[argh(positional)]
     /// architecture: arm, x64, ...
     arch: Arch,
+
+    #[argh(option, short = 'i')]
+    /// docker image to use
+    image: Option<String>,
 }
 
 enum Arch {
@@ -205,9 +209,16 @@ impl Arch {
 }
 
 fn main() {
-    let Arguments { program, arch } = argh::from_env();
+    let Arguments {
+        program,
+        arch,
+        image,
+    } = argh::from_env();
 
-    let id = spawn_runner();
+    let image = image.as_deref().unwrap_or("rebg");
+
+    let id = spawn_runner(image);
+
     let trace = run_qemu(&id, &program, &arch);
 
     let cs = arch.make_capstone().unwrap();
