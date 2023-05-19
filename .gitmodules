@@ -1,0 +1,4 @@
+[submodule "tools/qemu"]
+	path = tools/qemu
+	url = git@github.com:joleeee/qemu.git
+	branch = rebg
