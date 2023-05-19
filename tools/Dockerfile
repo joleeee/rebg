@@ -10,7 +10,7 @@ RUN chown root:root -R /root/qemu
 
 # compile
 WORKDIR /root/qemu
-RUN ./configure --with-git-submodules=ignore --target-list=aarch64-linux-user,x86_64-linux-user
+RUN ./configure --with-git-submodules=ignore --target-list=aarch64-linux-user,x86_64-linux-user --enable-tcg-interpreter
 RUN make -j4
 RUN make install
 
