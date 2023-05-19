@@ -294,6 +294,7 @@ fn main() {
         let dis_op = disasm.op_str().unwrap();
 
         println!("0x{:016x}: {:08x} {} {}", address, code, dis_mn, dis_op);
+        // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
     }
 
     let bytes = std::mem::size_of_val(&trace[0]) * trace.len();
