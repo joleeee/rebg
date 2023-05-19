@@ -5,15 +5,20 @@ use std::{
 
 use capstone::{prelude::BuildsCapstone, Capstone};
 
-struct Step<A, C, R, const N: usize> {
+struct Step<A, C, R> {
     address: A,
     code: C,
-    pc: R,
-    registers: [R; N],
+    state: R,
 }
 
 // define ARM64Step as a Step
-type ARM64Step = Step<u64, u32, u64, 32>;
+type ARM64Step = Step<u64, u32, ARM64State>;
+
+struct ARM64State {
+    regs: [u64; 32],
+    pc: u64,
+    flags: u64,
+}
 
 fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     // copy program into container
@@ -79,10 +84,9 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     let mut steps = Vec::new();
 
     for chunk in chunks {
-        let mut s_registers = None;
+        let mut s_state = None;
         let mut s_address = None;
         let mut s_code = None;
-        let mut s_pc = None;
 
         for (what, content) in chunk {
             match what {
@@ -95,25 +99,35 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
                             (name.trim(), u64::from_str_radix(value, 16).unwrap())
                         });
 
-                    let mut registers = [0u64; 32];
+                    let mut registers = [None; 32];
+                    let mut pc = None;
+                    let mut flags = None;
 
                     for (name, value) in regs {
                         match name {
                             "pc" => {
-                                s_pc = Some(value);
+                                pc = Some(value);
+                            }
+                            "flags" => {
+                                flags = Some(value);
                             }
                             _ => {
                                 let index = name.strip_prefix('x').unwrap();
                                 let index = usize::from_str_radix(index, 10).unwrap();
-                                registers[index] = value;
+                                registers[index] = Some(value);
                             }
                         }
                     }
 
-                    s_registers = Some(registers);
-                }
-                "flags" => {
-                    let flag = u64::from_str_radix(content, 16).unwrap();
+                    let pc = pc.unwrap();
+                    let flags = flags.unwrap();
+                    let registers = registers.map(Option::unwrap);
+
+                    s_state = Some(ARM64State {
+                        regs: registers,
+                        pc,
+                        flags,
+                    });
                 }
                 "header" => {
                     let (address, code) = content.split_once("|").unwrap();
@@ -130,14 +144,12 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
 
         let address = s_address.unwrap();
         let code = s_code.unwrap();
-        let registers = s_registers.unwrap();
-        let pc = s_pc.unwrap();
+        let state = s_state.unwrap();
 
         steps.push(ARM64Step {
             address,
             code,
-            pc,
-            registers,
+            state,
         });
     }
 
@@ -272,11 +284,10 @@ fn main() {
     for Step {
         address,
         code,
-        pc: _,
-        registers: _,
-    } in trace
+        state,
+    } in &trace
     {
-        let disasm = cs.disasm_all(&code.to_be_bytes(), address).unwrap();
+        let disasm = cs.disasm_all(&code.to_be_bytes(), *address).unwrap();
         assert_eq!(disasm.len(), 1);
         let disasm = disasm.first().unwrap();
         let dis_mn = disasm.mnemonic().unwrap();
