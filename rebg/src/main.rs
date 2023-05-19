@@ -295,4 +295,11 @@ fn main() {
 
         println!("0x{:016x}: {:08x} {} {}", address, code, dis_mn, dis_op);
     }
+
+    let bytes = std::mem::size_of_val(&trace[0]) * trace.len();
+    eprintln!(
+        "Used {}kB of memory for {} steps",
+        bytes / 1024,
+        trace.len()
+    );
 }
