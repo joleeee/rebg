@@ -5,13 +5,15 @@ use std::{
 
 use capstone::{prelude::BuildsCapstone, Capstone};
 
-struct Step<A, C> {
+struct Step<A, C, R, const N: usize> {
     address: A,
     code: C,
+    pc: R,
+    registers: [R; N],
 }
 
 // define ARM64Step as a Step
-type ARM64Step = Step<u64, u32>;
+type ARM64Step = Step<u64, u32, u64, 32>;
 
 fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     // copy program into container
@@ -61,31 +63,81 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
 
     let output = String::from_utf8(result.stderr).unwrap();
 
-    let lines = output
-        .split('\n')
+    let chunks = output
+        .split("\n----------------")
         .into_iter()
-        .filter(|x| x.starts_with("I0x"))
-        .map(|x| x.strip_prefix("I0x"));
+        .map(|x| x.trim())
+        .map(|chunk| {
+            chunk
+                .split("\n")
+                .into_iter()
+                .map(|x| x.trim())
+                .filter(|x| !matches!(*x, "" | "IN:"))
+                .filter_map(|x| x.split_once('|'))
+        });
 
     let mut steps = Vec::new();
 
-    for line in lines {
-        let mut parts = line.unwrap().split("|");
+    for chunk in chunks {
+        let mut s_registers = None;
+        let mut s_address = None;
+        let mut s_code = None;
+        let mut s_pc = None;
 
-        // text
-        let address = parts.next().unwrap();
-        let inst_data = parts.next().unwrap();
-        assert_eq!(parts.next(), None); // only 2
+        for (what, content) in chunk {
+            match what {
+                "regs" => {
+                    let regs = content
+                        .split("|")
+                        .map(|data| data.split_once('='))
+                        .map(Option::unwrap)
+                        .map(|(name, value)| {
+                            (name.trim(), u64::from_str_radix(value, 16).unwrap())
+                        });
 
-        // binary
-        let address = u64::from_str_radix(address, 16).unwrap();
-        // x86 can have 15 byte long instructions
-        // lets just do arm64 for now...
-        let inst_data = u32::from_str_radix(inst_data, 16).unwrap();
+                    let mut registers = [0u64; 32];
+
+                    for (name, value) in regs {
+                        match name {
+                            "pc" => {
+                                s_pc = Some(value);
+                            }
+                            _ => {
+                                let index = name.strip_prefix('x').unwrap();
+                                let index = usize::from_str_radix(index, 10).unwrap();
+                                registers[index] = value;
+                            }
+                        }
+                    }
+
+                    s_registers = Some(registers);
+                }
+                "flags" => {
+                    let flag = u64::from_str_radix(content, 16).unwrap();
+                }
+                "header" => {
+                    let (address, code) = content.split_once("|").unwrap();
+
+                    let address = u64::from_str_radix(address, 16).unwrap();
+                    let code = u32::from_str_radix(code, 16).unwrap();
+
+                    s_address = Some(address);
+                    s_code = Some(code);
+                }
+                _ => panic!("unknown data"),
+            }
+        }
+
+        let address = s_address.unwrap();
+        let code = s_code.unwrap();
+        let registers = s_registers.unwrap();
+        let pc = s_pc.unwrap();
 
         steps.push(ARM64Step {
             address,
-            code: inst_data,
+            code,
+            pc,
+            registers,
         });
     }
 
@@ -217,7 +269,13 @@ fn main() {
 
     let cs = arch.make_capstone().unwrap();
 
-    for Step { address, code } in trace {
+    for Step {
+        address,
+        code,
+        pc: _,
+        registers: _,
+    } in trace
+    {
         let disasm = cs.disasm_all(&code.to_be_bytes(), address).unwrap();
         assert_eq!(disasm.len(), 1);
         let disasm = disasm.first().unwrap();
