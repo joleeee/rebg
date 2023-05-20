@@ -7,72 +7,16 @@ use std::{
     process::{exit, Command, Stdio},
 };
 
-trait Code: Clone + Debug + hex::FromHex + std::fmt::LowerHex {
-    fn be_bytes(&self) -> &[u8];
-}
+mod arch;
+use arch::{ARM64Step, Code, X64Step};
 
-#[derive(Clone, Debug)]
-struct FourBytes([u8; 4]);
-impl Code for FourBytes {
-    fn be_bytes(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl FromHex for FourBytes {
-    type Error = hex::FromHexError;
-
-    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
-        let mut bytes = [0; 4];
-        hex::decode_to_slice(hex, &mut bytes)?;
-        Ok(FourBytes(bytes))
-    }
-}
-
-impl LowerHex for FourBytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", hex::encode(self.0))
-    }
-}
-
-type ARM64Step = Step<u64, FourBytes, ARM64State>;
-type ARM64State = CpuState<u64, 32>;
-
-// TODO use smallvec
-#[derive(Clone, Debug)]
-struct VarBytes(Vec<u8>);
-impl Code for VarBytes {
-    fn be_bytes(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl FromHex for VarBytes {
-    type Error = hex::FromHexError;
-
-    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
-        Ok(VarBytes(hex::decode(hex)?))
-    }
-}
-
-impl LowerHex for VarBytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", hex::encode(&self.0))
-    }
-}
-
-// u128 is such a dirty hack...
-//type X64Step = Step<u64, u128, X64State>;
-type X64Step = Step<u64, VarBytes, X64State>;
-type X64State = CpuState<u64, 16>;
-
-struct Step<A, C, R> {
+pub struct Step<A, C, R> {
     address: A,
     code: C,
     state: R,
 }
 
-struct CpuState<B, const N: usize>
+pub struct CpuState<B, const N: usize>
 where
     B: Num,
 {
