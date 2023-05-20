@@ -16,10 +16,7 @@ pub struct Step<A, C, R> {
     state: R,
 }
 
-pub struct CpuState<B, const N: usize>
-where
-    B: Num,
-{
+pub struct CpuState<B, const N: usize> {
     regs: [B; N],
     pc: B,
     flags: B,
