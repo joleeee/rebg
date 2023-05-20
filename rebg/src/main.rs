@@ -1,20 +1,19 @@
+use capstone::{prelude::BuildsCapstone, Capstone};
+use num_traits::Num;
 use std::{
     fmt::Debug,
     path::PathBuf,
     process::{exit, Command, Stdio},
 };
 
-use capstone::{prelude::BuildsCapstone, Capstone};
-use num_traits::Num;
+type ARM64Step = Step<u64, u32, ARM64State>;
+type ARM64State = CpuState<u64, 32>;
 
 struct Step<A, C, R> {
     address: A,
     code: C,
     state: R,
 }
-
-// define ARM64Step as a Step
-type ARM64Step = Step<u64, u32, ARM64State>;
 
 struct CpuState<B, const N: usize>
 where
@@ -24,8 +23,6 @@ where
     pc: B,
     flags: B,
 }
-
-type ARM64State = CpuState<u64, 32>;
 
 struct QemuParser;
 
