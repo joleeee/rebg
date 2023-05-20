@@ -1,9 +1,11 @@
 use std::{
+    fmt::Debug,
     path::PathBuf,
     process::{exit, Command, Stdio},
 };
 
 use capstone::{prelude::BuildsCapstone, Capstone};
+use num_traits::Num;
 
 struct Step<A, C, R> {
     address: A,
@@ -14,23 +16,32 @@ struct Step<A, C, R> {
 // define ARM64Step as a Step
 type ARM64Step = Step<u64, u32, ARM64State>;
 
-struct ARM64State {
-    regs: [u64; 32],
-    pc: u64,
-    flags: u64,
+struct CpuState<B, const N: usize>
+where
+    B: Num,
+{
+    regs: [B; N],
+    pc: B,
+    flags: B,
 }
 
-struct QemuParser {}
+type ARM64State = CpuState<u64, 32>;
+
+struct QemuParser;
 
 impl QemuParser {
-    fn parse_regs(input: &str) -> ARM64State {
+    fn parse_regs<B, const N: usize>(input: &str) -> CpuState<B, N>
+    where
+        B: Num + Copy,
+        <B as Num>::FromStrRadixErr: Debug,
+    {
         let regs = input
             .split("|")
             .map(|data| data.split_once('='))
             .map(Option::unwrap)
-            .map(|(name, value)| (name.trim(), u64::from_str_radix(value, 16).unwrap()));
+            .map(|(name, value)| (name.trim(), B::from_str_radix(value, 16).unwrap()));
 
-        let mut registers = [None; 32];
+        let mut registers: [Option<B>; N] = [None; N];
         let mut pc = None;
         let mut flags = None;
 
@@ -54,16 +65,20 @@ impl QemuParser {
         let flags = flags.unwrap();
         let registers = registers.map(Option::unwrap);
 
-        ARM64State {
+        CpuState {
             regs: registers,
             pc,
             flags,
         }
     }
 
-    fn parse<'a, I>(input: I) -> Step<u64, u32, ARM64State>
+    fn parse<'a, I, B, C>(input: I) -> Step<B, C, ARM64State>
     where
         I: Iterator<Item = &'a str>,
+        B: Num + Copy,
+        <B as Num>::FromStrRadixErr: Debug,
+        C: Num + Copy,
+        <C as Num>::FromStrRadixErr: Debug,
     {
         let lines = input.filter_map(|x| x.split_once('|'));
 
@@ -76,17 +91,15 @@ impl QemuParser {
                 "regs" => {
                     s_state = Some(Self::parse_regs(content));
                 }
-
                 "header" => {
                     let (address, code) = content.split_once("|").unwrap();
 
-                    let address = u64::from_str_radix(address, 16).unwrap();
-                    let code = u32::from_str_radix(code, 16).unwrap();
+                    let address = B::from_str_radix(address, 16).unwrap();
+                    let code = C::from_str_radix(code, 16).unwrap();
 
                     s_address = Some(address);
                     s_code = Some(code);
                 }
-
                 _ => panic!("unknown data"),
             }
         }
@@ -95,7 +108,7 @@ impl QemuParser {
         let code = s_code.unwrap();
         let state = s_state.unwrap();
 
-        ARM64Step {
+        Step {
             address,
             code,
             state,
