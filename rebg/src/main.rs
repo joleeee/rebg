@@ -36,7 +36,7 @@ impl QemuParser {
         <B as Num>::FromStrRadixErr: Debug,
     {
         let regs = input
-            .split("|")
+            .split('|')
             .map(|data| data.split_once('='))
             .map(Option::unwrap)
             .map(|(name, value)| (name.trim(), B::from_str_radix(value, 16).unwrap()));
@@ -92,7 +92,7 @@ impl QemuParser {
                     s_state = Some(Self::parse_regs(content));
                 }
                 "header" => {
-                    let (address, code) = content.split_once("|").unwrap();
+                    let (address, code) = content.split_once('|').unwrap();
 
                     let address = B::from_str_radix(address, 16).unwrap();
                     let code = C::from_str_radix(code, 16).unwrap();
@@ -170,7 +170,7 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
         .map(|x| x.trim())
         .map(|chunk| {
             chunk
-                .split("\n")
+                .split('\n')
                 .into_iter()
                 .map(|x| x.trim())
                 .filter(|x| !matches!(*x, "" | "IN:"))
@@ -315,7 +315,7 @@ fn main() {
     for Step {
         address,
         code,
-        state,
+        state: _,
     } in &trace
     {
         let disasm = cs.disasm_all(&code.to_be_bytes(), *address).unwrap();
