@@ -156,7 +156,7 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     steps
 }
 
-fn spawn_runner(image_name: &str) -> String {
+fn spawn_runner(image_name: &str, arch: &Arch) -> String {
     // stop any previous container
     let mut stop = Command::new("docker")
         .arg("kill")
@@ -183,6 +183,7 @@ fn spawn_runner(image_name: &str) -> String {
     let run = Command::new("docker")
         .arg("run")
         .arg("-d")
+        .args(["--platform", arch.docker_platform()])
         .arg("--name=rebg-runner")
         .arg(format!(
             "-v={}/container:/container",
@@ -261,6 +262,13 @@ impl Arch {
             Arch::X86_64 => "qemu-x86_64",
         }
     }
+
+    fn docker_platform(&self) -> &str {
+        match self {
+            Arch::ARM64 => "linux/arm64",
+            Arch::X86_64 => "linux/amd64",
+        }
+    }
 }
 
 fn main() {
@@ -274,7 +282,7 @@ fn main() {
     let id = if let Some(container) = container {
         container
     } else {
-        spawn_runner(&image)
+        spawn_runner(&image, &arch)
     };
 
     let trace = run_qemu(&id, &program, &arch);
