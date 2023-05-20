@@ -72,7 +72,7 @@ impl QemuParser {
         }
     }
 
-    fn parse<'a, I, B, C>(input: I) -> Step<B, C, ARM64State>
+    fn parse<'a, I, B, C, const N: usize>(input: I) -> Step<B, C, CpuState<B, N>>
     where
         I: Iterator<Item = &'a str>,
         B: Num + Copy,
