@@ -170,13 +170,12 @@ impl QemuParser {
     }
 }
 
-fn run_qemu<A, C, B, const N: usize>(
+fn run_qemu<C, B, const N: usize>(
     id: &str,
     program: &str,
     arch: &Arch,
-) -> Vec<Step<A, C, CpuState<B, N>>>
+) -> Vec<Step<B, C, CpuState<B, N>>>
 where
-    Vec<Step<A, C, CpuState<B, N>>>: FromIterator<Step<B, C, CpuState<B, N>>>,
     C: Code,
     B: Num + Copy,
     <B as Num>::FromStrRadixErr: Debug,
