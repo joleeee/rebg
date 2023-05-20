@@ -23,6 +23,44 @@ struct ARM64State {
 struct QemuParser {}
 
 impl QemuParser {
+    fn parse_regs(input: &str) -> ARM64State {
+        let regs = input
+            .split("|")
+            .map(|data| data.split_once('='))
+            .map(Option::unwrap)
+            .map(|(name, value)| (name.trim(), u64::from_str_radix(value, 16).unwrap()));
+
+        let mut registers = [None; 32];
+        let mut pc = None;
+        let mut flags = None;
+
+        for (name, value) in regs {
+            match name {
+                "pc" => {
+                    pc = Some(value);
+                }
+                "flags" => {
+                    flags = Some(value);
+                }
+                _ => {
+                    let index = name.strip_prefix('x').unwrap();
+                    let index = usize::from_str_radix(index, 10).unwrap();
+                    registers[index] = Some(value);
+                }
+            }
+        }
+
+        let pc = pc.unwrap();
+        let flags = flags.unwrap();
+        let registers = registers.map(Option::unwrap);
+
+        ARM64State {
+            regs: registers,
+            pc,
+            flags,
+        }
+    }
+
     fn parse<'a, I>(input: I) -> Step<u64, u32, ARM64State>
     where
         I: Iterator<Item = &'a str>,
@@ -36,43 +74,7 @@ impl QemuParser {
         for (what, content) in lines {
             match what {
                 "regs" => {
-                    let regs = content
-                        .split("|")
-                        .map(|data| data.split_once('='))
-                        .map(Option::unwrap)
-                        .map(|(name, value)| {
-                            (name.trim(), u64::from_str_radix(value, 16).unwrap())
-                        });
-
-                    let mut registers = [None; 32];
-                    let mut pc = None;
-                    let mut flags = None;
-
-                    for (name, value) in regs {
-                        match name {
-                            "pc" => {
-                                pc = Some(value);
-                            }
-                            "flags" => {
-                                flags = Some(value);
-                            }
-                            _ => {
-                                let index = name.strip_prefix('x').unwrap();
-                                let index = usize::from_str_radix(index, 10).unwrap();
-                                registers[index] = Some(value);
-                            }
-                        }
-                    }
-
-                    let pc = pc.unwrap();
-                    let flags = flags.unwrap();
-                    let registers = registers.map(Option::unwrap);
-
-                    s_state = Some(ARM64State {
-                        regs: registers,
-                        pc,
-                        flags,
-                    });
+                    s_state = Some(Self::parse_regs(content));
                 }
 
                 "header" => {
