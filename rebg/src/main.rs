@@ -1,35 +1,70 @@
 use capstone::{prelude::BuildsCapstone, Capstone};
+use hex::FromHex;
 use num_traits::Num;
 use std::{
-    fmt::Debug,
+    fmt::{Debug, LowerHex},
     path::PathBuf,
     process::{exit, Command, Stdio},
 };
 
-trait Code: Clone + Copy {
-    fn from_hex(hex: &str) -> Self;
-    fn to_be_bytes(&self) -> Box<[u8]>;
+trait Code: Clone + Debug + hex::FromHex + std::fmt::LowerHex {
+    fn be_bytes(&self) -> &[u8];
 }
 
-#[derive(Clone, Copy, Debug)]
-struct FourBytes(u32);
+#[derive(Clone, Debug)]
+struct FourBytes([u8; 4]);
 impl Code for FourBytes {
-    fn from_hex(hex: &str) -> Self {
-        Self(u32::from_str_radix(hex, 16).unwrap())
+    fn be_bytes(&self) -> &[u8] {
+        &self.0
     }
+}
 
-    fn to_be_bytes(&self) -> Box<[u8]> {
-        Box::new(self.0.to_be_bytes())
+impl FromHex for FourBytes {
+    type Error = hex::FromHexError;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
+        let mut bytes = [0; 4];
+        hex::decode_to_slice(hex, &mut bytes)?;
+        Ok(FourBytes(bytes))
+    }
+}
+
+impl LowerHex for FourBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
     }
 }
 
 type ARM64Step = Step<u64, FourBytes, ARM64State>;
 type ARM64State = CpuState<u64, 32>;
 
+// TODO use smallvec
+#[derive(Clone, Debug)]
+struct VarBytes(Vec<u8>);
+impl Code for VarBytes {
+    fn be_bytes(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
+impl FromHex for VarBytes {
+    type Error = hex::FromHexError;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
+        Ok(VarBytes(hex::decode(hex)?))
+    }
+}
+
+impl LowerHex for VarBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.0))
+    }
+}
+
 // u128 is such a dirty hack...
 //type X64Step = Step<u64, u128, X64State>;
-//type X64Step = Step<u64, u128, X64State>;
-//type X64State = CpuState<u64, 16>;
+type X64Step = Step<u64, VarBytes, X64State>;
+type X64State = CpuState<u64, 16>;
 
 struct Step<A, C, R> {
     address: A,
@@ -73,7 +108,7 @@ impl QemuParser {
                     flags = Some(value);
                 }
                 _ => {
-                    let index = name.strip_prefix('x').unwrap();
+                    let index = name.strip_prefix('r').unwrap();
                     let index = usize::from_str_radix(index, 10).unwrap();
                     registers[index] = Some(value);
                 }
@@ -97,6 +132,7 @@ impl QemuParser {
         B: Num + Copy,
         <B as Num>::FromStrRadixErr: Debug,
         C: Code,
+        <C as FromHex>::Error: Debug,
     {
         let lines = input.filter_map(|x| x.split_once('|'));
 
@@ -113,7 +149,7 @@ impl QemuParser {
                     let (address, code) = content.split_once('|').unwrap();
 
                     let address = B::from_str_radix(address, 16).unwrap();
-                    let code = C::from_hex(code);
+                    let code = C::from_hex(code).unwrap();
 
                     s_address = Some(address);
                     s_code = Some(code);
@@ -134,7 +170,19 @@ impl QemuParser {
     }
 }
 
-fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
+fn run_qemu<A, C, B, const N: usize>(
+    id: &str,
+    program: &str,
+    arch: &Arch,
+) -> Vec<Step<A, C, CpuState<B, N>>>
+where
+    Vec<Step<A, C, CpuState<B, N>>>: FromIterator<Step<B, C, CpuState<B, N>>>,
+    C: Code,
+    B: Num + Copy,
+    <B as Num>::FromStrRadixErr: Debug,
+    C: Code,
+    <C as FromHex>::Error: Debug,
+{
     // copy program into container
 
     // just copy it into the `container` folder
@@ -194,7 +242,8 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
                 .filter(|x| !matches!(*x, "" | "IN:"))
         });
 
-    chunks.map(QemuParser::parse).collect()
+    //chunks.map(QemuParser::parse).collect()
+    chunks.map(|x| QemuParser::parse::<_, B, C, N>(x)).collect()
 }
 
 fn spawn_runner(image_name: &str, arch: &Arch) -> String {
@@ -326,7 +375,7 @@ fn main() {
         spawn_runner(&image, &arch)
     };
 
-    let trace = run_qemu(&id, &program, &arch);
+    let trace: Vec<ARM64Step> = run_qemu(&id, &program, &arch);
 
     let cs = arch.make_capstone().unwrap();
 
@@ -336,13 +385,13 @@ fn main() {
         state: _,
     } in &trace
     {
-        let disasm = cs.disasm_all(&code.to_be_bytes(), *address).unwrap();
+        let disasm = cs.disasm_all(code.be_bytes(), *address).unwrap();
         assert_eq!(disasm.len(), 1);
         let disasm = disasm.first().unwrap();
         let dis_mn = disasm.mnemonic().unwrap();
         let dis_op = disasm.op_str().unwrap();
 
-        println!("0x{:016x}: {:08x} {} {}", address, code.0, dis_mn, dis_op);
+        println!("0x{:016x}: {:08x} {} {}", address, code, dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
     }
 
