@@ -11,7 +11,7 @@ RUN chown root:root -R /root/qemu
 # compile
 WORKDIR /root/qemu
 RUN ./configure --with-git-submodules=ignore --enable-tcg-interpreter --target-list=aarch64-linux-user,x86_64-linux-user
-RUN make -j4
+RUN make -j$(nproc)
 RUN make install
 
 # clean up
