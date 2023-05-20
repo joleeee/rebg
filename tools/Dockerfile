@@ -6,7 +6,6 @@ RUN apt-get install -y build-essential git python3 ninja-build pkg-config libgli
 
 # get source
 COPY qemu /root/qemu
-RUN chown root:root -R /root/qemu
 
 # compile
 WORKDIR /root/qemu
