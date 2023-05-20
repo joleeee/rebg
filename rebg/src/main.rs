@@ -20,6 +20,87 @@ struct ARM64State {
     flags: u64,
 }
 
+struct QemuParser {}
+
+impl QemuParser {
+    fn parse<'a, I>(input: I) -> Step<u64, u32, ARM64State>
+    where
+        I: Iterator<Item = &'a str>,
+    {
+        let lines = input.filter_map(|x| x.split_once('|'));
+
+        let mut s_state = None;
+        let mut s_address = None;
+        let mut s_code = None;
+
+        for (what, content) in lines {
+            match what {
+                "regs" => {
+                    let regs = content
+                        .split("|")
+                        .map(|data| data.split_once('='))
+                        .map(Option::unwrap)
+                        .map(|(name, value)| {
+                            (name.trim(), u64::from_str_radix(value, 16).unwrap())
+                        });
+
+                    let mut registers = [None; 32];
+                    let mut pc = None;
+                    let mut flags = None;
+
+                    for (name, value) in regs {
+                        match name {
+                            "pc" => {
+                                pc = Some(value);
+                            }
+                            "flags" => {
+                                flags = Some(value);
+                            }
+                            _ => {
+                                let index = name.strip_prefix('x').unwrap();
+                                let index = usize::from_str_radix(index, 10).unwrap();
+                                registers[index] = Some(value);
+                            }
+                        }
+                    }
+
+                    let pc = pc.unwrap();
+                    let flags = flags.unwrap();
+                    let registers = registers.map(Option::unwrap);
+
+                    s_state = Some(ARM64State {
+                        regs: registers,
+                        pc,
+                        flags,
+                    });
+                }
+
+                "header" => {
+                    let (address, code) = content.split_once("|").unwrap();
+
+                    let address = u64::from_str_radix(address, 16).unwrap();
+                    let code = u32::from_str_radix(code, 16).unwrap();
+
+                    s_address = Some(address);
+                    s_code = Some(code);
+                }
+
+                _ => panic!("unknown data"),
+            }
+        }
+
+        let address = s_address.unwrap();
+        let code = s_code.unwrap();
+        let state = s_state.unwrap();
+
+        ARM64Step {
+            address,
+            code,
+            state,
+        }
+    }
+}
+
 fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
     // copy program into container
 
@@ -78,82 +159,9 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> Vec<ARM64Step> {
                 .into_iter()
                 .map(|x| x.trim())
                 .filter(|x| !matches!(*x, "" | "IN:"))
-                .filter_map(|x| x.split_once('|'))
         });
 
-    let mut steps = Vec::new();
-
-    for chunk in chunks {
-        let mut s_state = None;
-        let mut s_address = None;
-        let mut s_code = None;
-
-        for (what, content) in chunk {
-            match what {
-                "regs" => {
-                    let regs = content
-                        .split("|")
-                        .map(|data| data.split_once('='))
-                        .map(Option::unwrap)
-                        .map(|(name, value)| {
-                            (name.trim(), u64::from_str_radix(value, 16).unwrap())
-                        });
-
-                    let mut registers = [None; 32];
-                    let mut pc = None;
-                    let mut flags = None;
-
-                    for (name, value) in regs {
-                        match name {
-                            "pc" => {
-                                pc = Some(value);
-                            }
-                            "flags" => {
-                                flags = Some(value);
-                            }
-                            _ => {
-                                let index = name.strip_prefix('x').unwrap();
-                                let index = usize::from_str_radix(index, 10).unwrap();
-                                registers[index] = Some(value);
-                            }
-                        }
-                    }
-
-                    let pc = pc.unwrap();
-                    let flags = flags.unwrap();
-                    let registers = registers.map(Option::unwrap);
-
-                    s_state = Some(ARM64State {
-                        regs: registers,
-                        pc,
-                        flags,
-                    });
-                }
-                "header" => {
-                    let (address, code) = content.split_once("|").unwrap();
-
-                    let address = u64::from_str_radix(address, 16).unwrap();
-                    let code = u32::from_str_radix(code, 16).unwrap();
-
-                    s_address = Some(address);
-                    s_code = Some(code);
-                }
-                _ => panic!("unknown data"),
-            }
-        }
-
-        let address = s_address.unwrap();
-        let code = s_code.unwrap();
-        let state = s_state.unwrap();
-
-        steps.push(ARM64Step {
-            address,
-            code,
-            state,
-        });
-    }
-
-    steps
+    chunks.map(QemuParser::parse).collect()
 }
 
 fn spawn_runner(image_name: &str, arch: &Arch) -> String {
