@@ -1,3 +1,4 @@
+use anyhow::Context;
 use capstone::{prelude::BuildsCapstone, Capstone};
 use hex::FromHex;
 use num_traits::Num;
@@ -25,7 +26,7 @@ pub struct CpuState<B, const N: usize> {
 struct QemuParser;
 
 impl QemuParser {
-    fn parse_regs<B, const N: usize>(input: &str) -> CpuState<B, N>
+    fn parse_regs<B, const N: usize>(input: &str) -> anyhow::Result<CpuState<B, N>>
     where
         B: Num + Copy,
         <B as Num>::FromStrRadixErr: Debug,
@@ -49,8 +50,8 @@ impl QemuParser {
                     flags = Some(value);
                 }
                 _ => {
-                    let index = name.strip_prefix('r').unwrap();
-                    let index = usize::from_str_radix(index, 10).unwrap();
+                    let index = name.strip_prefix('r').context("missing register prefix")?;
+                    let index = usize::from_str_radix(index, 10)?;
                     registers[index] = Some(value);
                 }
             }
@@ -58,16 +59,20 @@ impl QemuParser {
 
         let pc = pc.unwrap();
         let flags = flags.unwrap();
+
+        if registers.contains(&None) {
+            return Err(anyhow::anyhow!("register not set"));
+        }
         let registers = registers.map(Option::unwrap);
 
-        CpuState {
+        Ok(CpuState {
             regs: registers,
             pc,
             flags,
-        }
+        })
     }
 
-    fn parse<'a, I, B, C, const N: usize>(input: I) -> Step<B, C, CpuState<B, N>>
+    fn parse<'a, I, B, C, const N: usize>(input: I) -> anyhow::Result<Step<B, C, CpuState<B, N>>>
     where
         I: Iterator<Item = &'a str>,
         B: Num + Copy,
@@ -84,10 +89,10 @@ impl QemuParser {
         for (what, content) in lines {
             match what {
                 "regs" => {
-                    s_state = Some(Self::parse_regs(content));
+                    s_state = Some(Self::parse_regs(content)?);
                 }
                 "header" => {
-                    let (address, code) = content.split_once('|').unwrap();
+                    let (address, code) = content.split_once('|').context("missing |")?;
 
                     let address = B::from_str_radix(address, 16).unwrap();
                     let code = C::from_hex(code).unwrap();
@@ -103,11 +108,11 @@ impl QemuParser {
         let code = s_code.unwrap();
         let state = s_state.unwrap();
 
-        Step {
+        Ok(Step {
             address,
             code,
             state,
-        }
+        })
     }
 }
 
@@ -115,7 +120,7 @@ fn run_qemu<C, B, const N: usize>(
     id: &str,
     program: &str,
     arch: &Arch,
-) -> Vec<Step<B, C, CpuState<B, N>>>
+) -> anyhow::Result<Vec<Step<B, C, CpuState<B, N>>>>
 where
     C: Code,
     B: Num + Copy,
@@ -182,8 +187,8 @@ where
                 .filter(|x| !matches!(*x, "" | "IN:"))
         });
 
-    //chunks.map(QemuParser::parse).collect()
-    chunks.map(|x| QemuParser::parse::<_, B, C, N>(x)).collect()
+    // this implicitly converts Vec<Result<T>> to Result<Vec<T>>
+    chunks.map(QemuParser::parse).collect()
 }
 
 fn spawn_runner(image_name: &str, arch: &Arch) -> String {
@@ -352,11 +357,11 @@ fn main() {
 
     match arch {
         Arch::ARM64 => {
-            let trace: Vec<ARM64Step> = run_qemu(&id, &program, &arch);
+            let trace: Vec<ARM64Step> = run_qemu(&id, &program, &arch).unwrap();
             print_trace(&trace, cs);
         }
         Arch::X86_64 => {
-            let trace: Vec<X64Step> = run_qemu(&id, &program, &arch);
+            let trace: Vec<X64Step> = run_qemu(&id, &program, &arch).unwrap();
             print_trace(&trace, cs);
         }
     }
