@@ -6,8 +6,30 @@ use std::{
     process::{exit, Command, Stdio},
 };
 
-type ARM64Step = Step<u64, u32, ARM64State>;
+trait Code: Clone + Copy {
+    fn from_hex(hex: &str) -> Self;
+    fn to_be_bytes(&self) -> Box<[u8]>;
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FourBytes(u32);
+impl Code for FourBytes {
+    fn from_hex(hex: &str) -> Self {
+        Self(u32::from_str_radix(hex, 16).unwrap())
+    }
+
+    fn to_be_bytes(&self) -> Box<[u8]> {
+        Box::new(self.0.to_be_bytes())
+    }
+}
+
+type ARM64Step = Step<u64, FourBytes, ARM64State>;
 type ARM64State = CpuState<u64, 32>;
+
+// u128 is such a dirty hack...
+//type X64Step = Step<u64, u128, X64State>;
+//type X64Step = Step<u64, u128, X64State>;
+//type X64State = CpuState<u64, 16>;
 
 struct Step<A, C, R> {
     address: A,
@@ -74,8 +96,7 @@ impl QemuParser {
         I: Iterator<Item = &'a str>,
         B: Num + Copy,
         <B as Num>::FromStrRadixErr: Debug,
-        C: Num + Copy,
-        <C as Num>::FromStrRadixErr: Debug,
+        C: Code,
     {
         let lines = input.filter_map(|x| x.split_once('|'));
 
@@ -92,7 +113,7 @@ impl QemuParser {
                     let (address, code) = content.split_once('|').unwrap();
 
                     let address = B::from_str_radix(address, 16).unwrap();
-                    let code = C::from_str_radix(code, 16).unwrap();
+                    let code = C::from_hex(code);
 
                     s_address = Some(address);
                     s_code = Some(code);
@@ -321,7 +342,7 @@ fn main() {
         let dis_mn = disasm.mnemonic().unwrap();
         let dis_op = disasm.op_str().unwrap();
 
-        println!("0x{:016x}: {:08x} {} {}", address, code, dis_mn, dis_op);
+        println!("0x{:016x}: {:08x} {} {}", address, code.0, dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
     }
 
