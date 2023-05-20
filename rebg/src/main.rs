@@ -361,29 +361,20 @@ impl Arch {
     }
 }
 
-fn main() {
-    let Arguments {
-        program,
-        arch,
-        image,
-        container,
-    } = argh::from_env();
-
-    let id = if let Some(container) = container {
-        container
-    } else {
-        spawn_runner(&image, &arch)
-    };
-
-    let trace: Vec<ARM64Step> = run_qemu(&id, &program, &arch);
-
-    let cs = arch.make_capstone().unwrap();
-
+fn print_trace<C, B, const N: usize>(trace: &[Step<u64, C, CpuState<B, N>>], cs: Capstone)
+where
+    C: Code,
+    B: Num + Copy,
+    <B as Num>::FromStrRadixErr: Debug,
+    C: Code,
+    <C as FromHex>::Error: Debug,
+    B: LowerHex,
+{
     for Step {
         address,
         code,
         state: _,
-    } in &trace
+    } in trace
     {
         let disasm = cs.disasm_all(code.be_bytes(), *address).unwrap();
         assert_eq!(disasm.len(), 1);
@@ -401,4 +392,32 @@ fn main() {
         bytes / 1024,
         trace.len()
     );
+}
+
+fn main() {
+    let Arguments {
+        program,
+        arch,
+        image,
+        container,
+    } = argh::from_env();
+
+    let id = if let Some(container) = container {
+        container
+    } else {
+        spawn_runner(&image, &arch)
+    };
+
+    let cs = arch.make_capstone().unwrap();
+
+    match arch {
+        Arch::ARM64 => {
+            let trace: Vec<ARM64Step> = run_qemu(&id, &program, &arch);
+            print_trace(&trace, cs);
+        }
+        Arch::X86_64 => {
+            let trace: Vec<X64Step> = run_qemu(&id, &program, &arch);
+            print_trace(&trace, cs);
+        }
+    }
 }
