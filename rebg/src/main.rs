@@ -399,7 +399,7 @@ fn main() {
     let p = goblin::Object::parse(&buffer).unwrap();
     let p = match p {
         goblin::Object::Elf(e) => e,
-        _ => panic!(),
+        _ => todo!("only elf supported."),
     };
 
     let symbol_table = SymbolTable::from_elf(p);
