@@ -1,7 +1,7 @@
 use hex::FromHex;
 use std::fmt::{Debug, LowerHex};
 
-use crate::{CpuState, Step};
+use crate::{CpuState, Step, StepStruct};
 
 pub trait Code: Clone + Debug + hex::FromHex + std::fmt::LowerHex {
     fn be_bytes(&self) -> &[u8];
@@ -31,8 +31,25 @@ impl LowerHex for FourBytes {
     }
 }
 
-pub type ARM64Step = Step<u64, FourBytes, ARM64State>;
+pub type ARM64Step = StepStruct<u64, FourBytes, ARM64State>;
 pub type ARM64State = CpuState<u64, 32>;
+
+impl Step for ARM64Step {
+    type Code = FourBytes;
+    type State = ARM64State;
+
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    fn code(&self) -> &Self::Code {
+        &self.code
+    }
+
+    fn state(&self) -> &Self::State {
+        &self.state
+    }
+}
 
 // TODO use smallvec
 #[derive(Clone, Debug)]
@@ -57,5 +74,22 @@ impl LowerHex for VarBytes {
     }
 }
 
-pub type X64Step = Step<u64, VarBytes, X64State>;
+pub type X64Step = StepStruct<u64, VarBytes, X64State>;
 pub type X64State = CpuState<u64, 16>;
+
+impl Step for X64Step {
+    type Code = VarBytes;
+    type State = X64State;
+
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    fn code(&self) -> &Self::Code {
+        &self.code
+    }
+
+    fn state(&self) -> &Self::State {
+        &self.state
+    }
+}

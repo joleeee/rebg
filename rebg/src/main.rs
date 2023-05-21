@@ -11,7 +11,15 @@ use std::{
 mod arch;
 use arch::{ARM64Step, Code, X64Step};
 
-pub struct Step<A, C, R> {
+trait Step {
+    type Code: Code;
+    type State;
+    fn address(&self) -> u64;
+    fn code(&self) -> &Self::Code;
+    fn state(&self) -> &Self::State;
+}
+
+pub struct StepStruct<A, C, R> {
     address: A,
     code: C,
     state: R,
@@ -72,7 +80,9 @@ impl QemuParser {
         })
     }
 
-    fn parse<'a, I, B, C, const N: usize>(input: I) -> anyhow::Result<Step<B, C, CpuState<B, N>>>
+    fn parse<'a, I, B, C, const N: usize>(
+        input: I,
+    ) -> anyhow::Result<StepStruct<B, C, CpuState<B, N>>>
     where
         I: Iterator<Item = &'a str>,
         B: Num + Copy,
@@ -108,7 +118,7 @@ impl QemuParser {
         let code = s_code.unwrap();
         let state = s_state.unwrap();
 
-        Ok(Step {
+        Ok(StepStruct {
             address,
             code,
             state,
@@ -120,7 +130,7 @@ fn run_qemu<C, B, const N: usize>(
     id: &str,
     program: &str,
     arch: &Arch,
-) -> anyhow::Result<Vec<Step<B, C, CpuState<B, N>>>>
+) -> anyhow::Result<Vec<StepStruct<B, C, CpuState<B, N>>>>
 where
     C: Code,
     B: Num + Copy + Debug + LowerHex,
@@ -330,22 +340,12 @@ impl Arch {
     }
 }
 
-fn print_trace<C, B, const N: usize>(trace: &[Step<u64, C, CpuState<B, N>>], cs: Capstone)
-where
-    C: Code,
-    B: Num + Copy,
-    <B as Num>::FromStrRadixErr: Debug,
-    C: Code,
-    <C as FromHex>::Error: Debug,
-    B: LowerHex,
-{
-    for Step {
-        address,
-        code,
-        state: _,
-    } in trace
-    {
-        let disasm = cs.disasm_all(code.be_bytes(), *address).unwrap();
+fn print_trace<S: Step>(trace: &[S], cs: Capstone) {
+    for step in trace {
+        let address = step.address();
+        let code = step.code();
+
+        let disasm = cs.disasm_all(code.be_bytes(), address).unwrap();
         assert_eq!(disasm.len(), 1);
         let disasm = disasm.first().unwrap();
         let dis_mn = disasm.mnemonic().unwrap();
