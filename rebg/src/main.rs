@@ -107,14 +107,11 @@ impl QemuParser {
                 "regs" => {
                     s_state = Some(CpuState::from_str(content)?);
                 }
-                "header" => {
-                    let (address, code) = content.split_once('|').context("missing |")?;
-
-                    let address = u64::from_str_radix(address, 16).unwrap();
-                    let code = C::from_hex(code).unwrap();
-
-                    s_address = Some(address);
-                    s_code = Some(code);
+                "address" => {
+                    s_address = Some(u64::from_str_radix(content, 16)?);
+                }
+                "code" => {
+                    s_code = Some(C::from_hex(content).unwrap());
                 }
                 _ => panic!("unknown data"),
             }
