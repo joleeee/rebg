@@ -16,9 +16,13 @@ mod arch;
 use arch::{ARM64Step, Code, X64Step};
 mod syms;
 
+trait State: Clone {
+    fn print_diff(&self, other: &Self) -> bool;
+}
+
 trait Step {
     type Code: Code;
-    type State;
+    type State: State;
     fn address(&self) -> u64;
     fn code(&self) -> &Self::Code;
     fn state(&self) -> &Self::State;
@@ -31,6 +35,7 @@ pub struct StepStruct<C, R> {
     state: R,
 }
 
+#[derive(Clone, Debug)]
 pub struct CpuState<B, const N: usize> {
     regs: [B; N],
     pc: B,
@@ -349,7 +354,16 @@ impl Arch {
 }
 
 fn print_trace<S: Step>(trace: &[S], cs: Capstone, syms: Option<&SymbolTable>) {
+    let mut previous_state: Option<<S as Step>::State> = None;
+
     for step in trace {
+        if let Some(previous) = previous_state {
+            let current = step.state();
+            if previous.print_diff(&current) {
+                println!("");
+            }
+        }
+
         let address = step.address();
         let code = step.code();
 
@@ -370,6 +384,8 @@ fn print_trace<S: Step>(trace: &[S], cs: Capstone, syms: Option<&SymbolTable>) {
 
         println!("{}: {:08x} {} {}", location, code, dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
+
+        previous_state = Some(step.state().clone());
     }
 
     let bytes = std::mem::size_of_val(&trace[0]) * trace.len();

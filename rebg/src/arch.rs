@@ -1,7 +1,7 @@
 use hex::FromHex;
 use std::fmt::{Debug, LowerHex};
 
-use crate::{CpuState, Step, StepStruct};
+use crate::{CpuState, State, Step, StepStruct};
 
 pub trait Code: Clone + Debug + hex::FromHex + std::fmt::LowerHex {
     fn be_bytes(&self) -> &[u8];
@@ -60,7 +60,7 @@ impl LowerHex for VarBytes {
 pub type X64Step = StepStruct<VarBytes, X64State>;
 pub type X64State = CpuState<u64, 16>;
 
-impl<X: Code, Y> Step for StepStruct<X, Y> {
+impl<X: Code, Y: State> Step for StepStruct<X, Y> {
     type Code = X;
     type State = Y;
 
@@ -82,5 +82,24 @@ impl<X: Code, Y> Step for StepStruct<X, Y> {
             code,
             state,
         }
+    }
+}
+
+impl<B: Clone + PartialEq + LowerHex, const N: usize> State for CpuState<B, N> {
+    fn print_diff(&self, new: &Self) -> bool {
+        // get all registers that are different
+        let diff_regs = self
+            .regs
+            .iter()
+            .zip(new.regs.iter())
+            .enumerate()
+            .filter_map(|(i, (a, b))| if a != b { Some((i, a, b)) } else { None })
+            .collect::<Vec<_>>();
+
+        for (i, a, b) in &diff_regs {
+            println!("r{} <- {:x} (prev {:x})", i, b, a);
+        }
+
+        !diff_regs.is_empty()
     }
 }
