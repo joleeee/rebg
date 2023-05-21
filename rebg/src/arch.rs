@@ -31,7 +31,7 @@ impl LowerHex for FourBytes {
     }
 }
 
-pub type ARM64Step = StepStruct<u64, FourBytes, ARM64State>;
+pub type ARM64Step = StepStruct<FourBytes, ARM64State>;
 pub type ARM64State = CpuState<u64, 32>;
 
 // TODO use smallvec
@@ -57,10 +57,10 @@ impl LowerHex for VarBytes {
     }
 }
 
-pub type X64Step = StepStruct<u64, VarBytes, X64State>;
+pub type X64Step = StepStruct<VarBytes, X64State>;
 pub type X64State = CpuState<u64, 16>;
 
-impl<X: Code, Y> Step for StepStruct<u64, X, Y> {
+impl<X: Code, Y> Step for StepStruct<X, Y> {
     type Code = X;
     type State = Y;
 

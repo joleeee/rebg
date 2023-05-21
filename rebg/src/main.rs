@@ -19,8 +19,8 @@ trait Step {
     fn state(&self) -> &Self::State;
 }
 
-pub struct StepStruct<A, C, R> {
-    address: A,
+pub struct StepStruct<C, R> {
+    address: u64,
     code: C,
     state: R,
 }
@@ -80,9 +80,7 @@ impl QemuParser {
         })
     }
 
-    fn parse<'a, I, B, C, const N: usize>(
-        input: I,
-    ) -> anyhow::Result<StepStruct<B, C, CpuState<B, N>>>
+    fn parse<'a, I, B, C, const N: usize>(input: I) -> anyhow::Result<StepStruct<C, CpuState<B, N>>>
     where
         I: Iterator<Item = &'a str>,
         B: Num + Copy,
@@ -104,7 +102,7 @@ impl QemuParser {
                 "header" => {
                     let (address, code) = content.split_once('|').context("missing |")?;
 
-                    let address = B::from_str_radix(address, 16).unwrap();
+                    let address = u64::from_str_radix(address, 16).unwrap();
                     let code = C::from_hex(code).unwrap();
 
                     s_address = Some(address);
@@ -130,9 +128,8 @@ fn run_qemu<C, B, const N: usize>(
     id: &str,
     program: &str,
     arch: &Arch,
-) -> anyhow::Result<Vec<StepStruct<B, C, CpuState<B, N>>>>
+) -> anyhow::Result<Vec<StepStruct<C, CpuState<B, N>>>>
 where
-    C: Code,
     B: Num + Copy + Debug + LowerHex,
     <B as Num>::FromStrRadixErr: Debug,
     C: Code,
@@ -210,8 +207,8 @@ where
                 let (path, other) = value.split_once('|').unwrap();
                 let (from, to) = other.split_once('|').unwrap();
 
-                let from = B::from_str_radix(from, 16).unwrap();
-                let to = B::from_str_radix(to, 16).unwrap();
+                let from = u64::from_str_radix(from, 16).unwrap();
+                let to = u64::from_str_radix(to, 16).unwrap();
 
                 println!("{}, {:x}:{:x}", path, from, to);
             }
