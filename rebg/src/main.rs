@@ -5,13 +5,16 @@ use num_traits::Num;
 use std::{
     collections::HashMap,
     fmt::{Debug, LowerHex},
+    fs,
     path::PathBuf,
     process::{exit, Command, Stdio},
     str::FromStr,
 };
+use syms::SymbolTable;
 
 mod arch;
 use arch::{ARM64Step, Code, X64Step};
+mod syms;
 
 trait Step {
     type Code: Code;
@@ -345,7 +348,7 @@ impl Arch {
     }
 }
 
-fn print_trace<S: Step>(trace: &[S], cs: Capstone) {
+fn print_trace<S: Step>(trace: &[S], cs: Capstone, syms: Option<&SymbolTable>) {
     for step in trace {
         let address = step.address();
         let code = step.code();
@@ -356,7 +359,16 @@ fn print_trace<S: Step>(trace: &[S], cs: Capstone) {
         let dis_mn = disasm.mnemonic().unwrap();
         let dis_op = disasm.op_str().unwrap();
 
-        println!("0x{:016x}: {:08x} {} {}", address, code, dis_mn, dis_op);
+        let symbol = syms.and_then(|s| s.lookup(address));
+
+        let location = if let Some(symbol) = symbol {
+            let symbol = format!("<{}>", symbol);
+            format!("{:>18}", symbol)
+        } else {
+            format!("0x{:016x}", address)
+        };
+
+        println!("{}: {:08x} {} {}", location, code, dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
     }
 
@@ -386,18 +398,63 @@ fn main() {
 
     let raw_output = run_qemu(&id, &program, &arch).unwrap();
 
+    let buffer = fs::read(&program).unwrap();
+
+    let p = goblin::Object::parse(&buffer).unwrap();
+    let p = match p {
+        goblin::Object::Elf(e) => e,
+        _ => panic!(),
+    };
+
+    let symbol_table = SymbolTable::from_elf(p);
+
+    let program_path_inside = format!(
+        "/container/{}",
+        PathBuf::from(&program)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
+
     match arch {
         Arch::ARM64 => {
             let result: RunResult<_, _, 32> = parse_output(&raw_output).unwrap();
             let trace: Vec<ARM64Step> = result.trace;
 
-            print_trace(&trace, cs);
+            let main_binary = result.binaries.get(&program_path_inside).unwrap();
+            let symbol_table = symbol_table.pie(main_binary.0);
+
+            print_trace(&trace, cs, Some(&symbol_table));
         }
         Arch::X86_64 => {
             let result: RunResult<_, _, 16> = parse_output(&raw_output).unwrap();
             let trace: Vec<X64Step> = result.trace;
 
-            print_trace(&trace, cs);
+            // Symbol {
+            //     name: "main",
+            //     from: 0x1158,
+            //     to: 0x1191,
+            // },
+            // Symbol {
+            //     name: "get_sum",
+            //     from: 0x1149,
+            //     to: 0x1158,
+            // },
+            //
+            // (varies each time on amd64, arm doesnt do PIE?)
+            // /container/simple-amd64: 0xffff8069c000
+            //
+            // main @ runtime: 0x0000ffff8069d158
+            //
+            // 0x0000ffff8069d158 - 0xffff8069c000 = 0x1158
+
+            //println!("{:#x?}", result.binaries);
+
+            let main_binary = result.binaries.get(&program_path_inside).unwrap();
+            let symbol_table = symbol_table.pie(main_binary.0);
+
+            print_trace(&trace, cs, Some(&symbol_table));
         }
     }
 }
