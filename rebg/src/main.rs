@@ -6,6 +6,7 @@ use std::{
     fmt::{Debug, LowerHex},
     path::PathBuf,
     process::{exit, Command, Stdio},
+    str::FromStr,
 };
 
 mod arch;
@@ -32,14 +33,14 @@ pub struct CpuState<B, const N: usize> {
     flags: B,
 }
 
-struct QemuParser;
+impl<B, const N: usize> FromStr for CpuState<B, N>
+where
+    B: Num + Copy,
+    <B as Num>::FromStrRadixErr: Debug,
+{
+    type Err = anyhow::Error;
 
-impl QemuParser {
-    fn parse_regs<B, const N: usize>(input: &str) -> anyhow::Result<CpuState<B, N>>
-    where
-        B: Num + Copy,
-        <B as Num>::FromStrRadixErr: Debug,
-    {
+    fn from_str(input: &str) -> anyhow::Result<Self> {
         let regs = input
             .split('|')
             .map(|data| data.split_once('='))
@@ -80,7 +81,11 @@ impl QemuParser {
             flags,
         })
     }
+}
 
+struct QemuParser;
+
+impl QemuParser {
     fn parse<'a, I, B, C, const N: usize, S: Step<State = CpuState<B, N>> + Step<Code = C>>(
         input: I,
     ) -> anyhow::Result<S>
@@ -100,7 +105,7 @@ impl QemuParser {
         for (what, content) in lines {
             match what {
                 "regs" => {
-                    s_state = Some(Self::parse_regs(content)?);
+                    s_state = Some(CpuState::from_str(content)?);
                 }
                 "header" => {
                     let (address, code) = content.split_once('|').context("missing |")?;
