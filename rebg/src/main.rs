@@ -125,20 +125,8 @@ impl QemuParser {
     }
 }
 
-fn run_qemu<C, B, const N: usize>(
-    id: &str,
-    program: &str,
-    arch: &Arch,
-) -> anyhow::Result<Vec<StepStruct<C, CpuState<B, N>>>>
-where
-    B: Num + Copy + Debug + LowerHex,
-    <B as Num>::FromStrRadixErr: Debug,
-    C: Code,
-    <C as FromHex>::Error: Debug,
-{
+fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
     // copy program into container
-
-    // just copy it into the `container` folder
     let cp = Command::new("cp")
         .arg(program)
         .arg("container/")
@@ -181,8 +169,18 @@ where
         exit(1);
     }
 
-    let output = String::from_utf8(result.stderr).unwrap();
+    Ok(String::from_utf8(result.stderr).unwrap())
+}
 
+fn parse_output<C, B, const N: usize>(
+    output: &str,
+) -> anyhow::Result<Vec<StepStruct<C, CpuState<B, N>>>>
+where
+    B: Num + Copy + Debug + LowerHex,
+    <B as Num>::FromStrRadixErr: Debug,
+    C: Code,
+    <C as FromHex>::Error: Debug,
+{
     let mut chunks = output
         .split("----------------")
         .into_iter()
@@ -377,13 +375,15 @@ fn main() {
 
     let cs = arch.make_capstone().unwrap();
 
+    let raw_output = run_qemu(&id, &program, &arch).unwrap();
+
     match arch {
         Arch::ARM64 => {
-            let trace: Vec<ARM64Step> = run_qemu(&id, &program, &arch).unwrap();
+            let trace: Vec<ARM64Step> = parse_output(&raw_output).unwrap();
             print_trace(&trace, cs);
         }
         Arch::X86_64 => {
-            let trace: Vec<X64Step> = run_qemu(&id, &program, &arch).unwrap();
+            let trace: Vec<X64Step> = parse_output(&raw_output).unwrap();
             print_trace(&trace, cs);
         }
     }
