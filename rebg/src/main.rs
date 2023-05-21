@@ -388,11 +388,7 @@ fn main() {
         container,
     } = argh::from_env();
 
-    let id = if let Some(container) = container {
-        container
-    } else {
-        spawn_runner(&image, &arch)
-    };
+    let id = container.unwrap_or(spawn_runner(&image, &arch));
 
     let cs = arch.make_capstone().unwrap();
 
