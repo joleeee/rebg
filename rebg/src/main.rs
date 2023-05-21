@@ -266,7 +266,7 @@ enum Arch {
 impl argh::FromArgValue for Arch {
     fn from_arg_value(value: &str) -> Result<Self, String> {
         match value {
-            "arm64" | "arm" => Ok(Arch::ARM64),
+            "arm64" | "arm" | "aarch64" => Ok(Arch::ARM64),
             "x86_64" | "amd64" | "amd" | "x64" => Ok(Arch::X86_64),
             _ => Err(format!("Unknown arch: {}", value)),
         }
