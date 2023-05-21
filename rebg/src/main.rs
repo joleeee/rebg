@@ -123,7 +123,7 @@ fn run_qemu<C, B, const N: usize>(
 ) -> anyhow::Result<Vec<Step<B, C, CpuState<B, N>>>>
 where
     C: Code,
-    B: Num + Copy,
+    B: Num + Copy + Debug + LowerHex,
     <B as Num>::FromStrRadixErr: Debug,
     C: Code,
     <C as FromHex>::Error: Debug,
@@ -175,8 +175,8 @@ where
 
     let output = String::from_utf8(result.stderr).unwrap();
 
-    let chunks = output
-        .split("\n----------------")
+    let mut chunks = output
+        .split("----------------")
         .into_iter()
         .map(|x| x.trim())
         .map(|chunk| {
@@ -186,6 +186,30 @@ where
                 .map(|x| x.trim())
                 .filter(|x| !matches!(*x, "" | "IN:"))
         });
+
+    let header_chunk: Vec<_> = chunks
+        .next()
+        .context("missing header")?
+        .map(|x| x.split_once('|'))
+        .collect::<Option<Vec<_>>>()
+        .context("invalid header, should only be | separated key|values")?;
+
+    for (key, value) in header_chunk {
+        match key {
+            "elflibload" => {
+                let (path, other) = value.split_once('|').unwrap();
+                let (from, to) = other.split_once('|').unwrap();
+
+                let from = B::from_str_radix(from, 16).unwrap();
+                let to = B::from_str_radix(to, 16).unwrap();
+
+                println!("{}, {:x}:{:x}", path, from, to);
+            }
+            _ => {
+                return Err(anyhow::anyhow!("unknown header key: {}", key));
+            }
+        }
+    }
 
     // this implicitly converts Vec<Result<T>> to Result<Vec<T>>
     chunks.map(QemuParser::parse).collect()
