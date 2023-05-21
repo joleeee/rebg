@@ -17,6 +17,7 @@ trait Step {
     fn address(&self) -> u64;
     fn code(&self) -> &Self::Code;
     fn state(&self) -> &Self::State;
+    fn from_parts(address: u64, code: Self::Code, state: Self::State) -> Self;
 }
 
 pub struct StepStruct<C, R> {
@@ -80,7 +81,9 @@ impl QemuParser {
         })
     }
 
-    fn parse<'a, I, B, C, const N: usize>(input: I) -> anyhow::Result<StepStruct<C, CpuState<B, N>>>
+    fn parse<'a, I, B, C, const N: usize, S: Step<State = CpuState<B, N>> + Step<Code = C>>(
+        input: I,
+    ) -> anyhow::Result<S>
     where
         I: Iterator<Item = &'a str>,
         B: Num + Copy,
@@ -116,11 +119,7 @@ impl QemuParser {
         let code = s_code.unwrap();
         let state = s_state.unwrap();
 
-        Ok(StepStruct {
-            address,
-            code,
-            state,
-        })
+        Ok(S::from_parts(address, code, state))
     }
 }
 

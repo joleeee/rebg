@@ -75,4 +75,12 @@ impl<X: Code, Y> Step for StepStruct<X, Y> {
     fn state(&self) -> &Self::State {
         &self.state
     }
+
+    fn from_parts(address: u64, code: Self::Code, state: Self::State) -> Self {
+        Self {
+            address,
+            code,
+            state,
+        }
+    }
 }
