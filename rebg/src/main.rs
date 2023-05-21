@@ -3,6 +3,7 @@ use capstone::{prelude::BuildsCapstone, Capstone};
 use hex::FromHex;
 use num_traits::Num;
 use std::{
+    collections::HashMap,
     fmt::{Debug, LowerHex},
     path::PathBuf,
     process::{exit, Command, Stdio},
@@ -172,9 +173,12 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
     Ok(String::from_utf8(result.stderr).unwrap())
 }
 
-fn parse_output<C, B, const N: usize>(
-    output: &str,
-) -> anyhow::Result<Vec<StepStruct<C, CpuState<B, N>>>>
+struct RunResult<C, B, const N: usize> {
+    binaries: HashMap<String, (u64, u64)>,
+    trace: Vec<StepStruct<C, CpuState<B, N>>>,
+}
+
+fn parse_output<C, B, const N: usize>(output: &str) -> anyhow::Result<RunResult<C, B, N>>
 where
     B: Num + Copy + Debug + LowerHex,
     <B as Num>::FromStrRadixErr: Debug,
@@ -200,6 +204,7 @@ where
         .collect::<Option<Vec<_>>>()
         .context("invalid header, should only be | separated key|values")?;
 
+    let mut elfs = HashMap::new();
     for (key, value) in header_chunk {
         match key {
             "elflibload" => {
@@ -209,7 +214,7 @@ where
                 let from = u64::from_str_radix(from, 16).unwrap();
                 let to = u64::from_str_radix(to, 16).unwrap();
 
-                println!("{}, {:x}:{:x}", path, from, to);
+                elfs.insert(path.to_string(), (from, to));
             }
             _ => {
                 return Err(anyhow::anyhow!("unknown header key: {}", key));
@@ -217,8 +222,12 @@ where
         }
     }
 
-    // this implicitly converts Vec<Result<T>> to Result<Vec<T>>
-    chunks.map(QemuParser::parse).collect()
+    let trace: Result<Vec<_>, _> = chunks.map(QemuParser::parse).collect();
+
+    Ok(RunResult {
+        binaries: elfs,
+        trace: trace?,
+    })
 }
 
 fn spawn_runner(image_name: &str, arch: &Arch) -> String {
@@ -379,11 +388,15 @@ fn main() {
 
     match arch {
         Arch::ARM64 => {
-            let trace: Vec<ARM64Step> = parse_output(&raw_output).unwrap();
+            let result: RunResult<_, _, 32> = parse_output(&raw_output).unwrap();
+            let trace: Vec<ARM64Step> = result.trace;
+
             print_trace(&trace, cs);
         }
         Arch::X86_64 => {
-            let trace: Vec<X64Step> = parse_output(&raw_output).unwrap();
+            let result: RunResult<_, _, 16> = parse_output(&raw_output).unwrap();
+            let trace: Vec<X64Step> = result.trace;
+
             print_trace(&trace, cs);
         }
     }
