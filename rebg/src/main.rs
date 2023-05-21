@@ -285,7 +285,7 @@ fn spawn_runner(image_name: &str, arch: &Arch) -> String {
 struct Arguments {
     /// the program to trace
     #[argh(positional)]
-    program: String,
+    program: PathBuf,
 
     #[argh(positional)]
     /// architecture: arm, x64, ...
@@ -396,7 +396,7 @@ fn main() {
 
     let cs = arch.make_capstone().unwrap();
 
-    let raw_output = run_qemu(&id, &program, &arch).unwrap();
+    let raw_output = run_qemu(&id, program.to_str().unwrap(), &arch).unwrap();
 
     let buffer = fs::read(&program).unwrap();
 
@@ -410,11 +410,7 @@ fn main() {
 
     let program_path_inside = format!(
         "/container/{}",
-        PathBuf::from(&program)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
+        program.file_name().unwrap().to_str().unwrap()
     );
 
     match arch {
@@ -430,26 +426,6 @@ fn main() {
         Arch::X86_64 => {
             let result: RunResult<_, _, 16> = parse_output(&raw_output).unwrap();
             let trace: Vec<X64Step> = result.trace;
-
-            // Symbol {
-            //     name: "main",
-            //     from: 0x1158,
-            //     to: 0x1191,
-            // },
-            // Symbol {
-            //     name: "get_sum",
-            //     from: 0x1149,
-            //     to: 0x1158,
-            // },
-            //
-            // (varies each time on amd64, arm doesnt do PIE?)
-            // /container/simple-amd64: 0xffff8069c000
-            //
-            // main @ runtime: 0x0000ffff8069d158
-            //
-            // 0x0000ffff8069d158 - 0xffff8069c000 = 0x1158
-
-            //println!("{:#x?}", result.binaries);
 
             let main_binary = result.binaries.get(&program_path_inside).unwrap();
             let symbol_table = symbol_table.pie(main_binary.0);

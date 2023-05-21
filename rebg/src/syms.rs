@@ -50,44 +50,6 @@ impl SymbolTable {
             })
             .collect::<Vec<_>>();
 
-        // X64
-        // ProgramHeader {
-        //     p_type: "PT_LOAD",
-        //     p_flags: 0x4,
-        //     p_offset: 0x0,
-        //     p_vaddr: 0x0,
-        //     p_paddr: 0x0,
-        //     p_filesz: 0x628,
-        //     p_memsz: 0x628,
-        //     p_align: 4096,
-        // },
-        // ProgramHeader {
-        //     p_type: "PT_LOAD",
-        //     p_flags: 0x5,
-        //     p_offset: 0x1000,
-        //     p_vaddr: 0x1000,
-        //     p_paddr: 0x1000,
-        //     p_filesz: 0x1a1,
-        //     p_memsz: 0x1a1,
-        //     p_align: 4096,
-        // },
-
-        // ARM64
-        //
-        // ProgramHeader {
-        //     p_type: "PT_LOAD",
-        //     p_flags: 0x5,
-        //     p_offset: 0x0,
-        //     p_vaddr: 0x400000,
-        //     p_paddr: 0x400000,
-        //     p_filesz: 0x7cc,
-        //     p_memsz: 0x7cc,
-        //     p_align: 65536,
-        // },
-
-        // we have to take all symbols and move them
-        // symbol.from = symbol.from - offset + vaddr/paddr
-
         let mut symbols = Vec::new();
         for sym in &elf.syms {
             let name = elf
@@ -104,7 +66,6 @@ impl SymbolTable {
             let offset = if let Some(offset) = offset {
                 offset
             } else {
-                //println!("{} not in any header", name);
                 continue;
             };
 
@@ -112,20 +73,11 @@ impl SymbolTable {
             // address
             let base = base + offset.offset - offset.addr;
 
-            // then add the location of the binary (cus PIE)
-
-            if name == "main" {
-                println!("container, base: {:x}", base);
-                dbg!(&offset);
-            }
-
             symbols.push(Symbol {
                 name: name.to_string(),
                 from: base,
                 to: base + size,
             });
-
-            // 40059c: get_sum
         }
 
         Self { symbols }
