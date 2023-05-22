@@ -97,7 +97,7 @@ impl<B: Clone + PartialEq + LowerHex, const N: usize> State for CpuState<B, N> {
             .collect::<Vec<_>>();
 
         for (i, a, b) in &diff_regs {
-            println!("r{} <- {:x} (prev {:x})", i, b, a);
+            println!("{} <- {:x} (prev {:x})", self.register_name(*i), b, a);
         }
 
         !diff_regs.is_empty()

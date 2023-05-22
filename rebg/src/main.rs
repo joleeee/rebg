@@ -18,6 +18,9 @@ mod syms;
 
 trait State: Clone {
     fn print_diff(&self, other: &Self) -> bool;
+    fn register_name(&self, index: usize) -> String {
+        format!("r{}", index)
+    }
 }
 
 trait Step {
