@@ -14,6 +14,7 @@ use syms::SymbolTable;
 
 mod arch;
 use arch::{ARM64Step, Code, X64Step};
+mod rstate;
 mod syms;
 
 trait State: Clone {
@@ -38,7 +39,7 @@ pub struct StepStruct<C, R> {
     state: R,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CpuState<B, const N: usize> {
     regs: [B; N],
     pc: B,
