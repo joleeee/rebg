@@ -205,9 +205,9 @@ struct Arguments {
     /// architecture: arm, x64, ...
     arch: Option<Arch>,
 
-    #[argh(option, short = 'i', default = r#"String::from("rebg")"#)]
+    #[argh(option, short = 'i')]
     /// docker image to use
-    image: String,
+    image: Option<String>,
 
     #[argh(option, short = 'e')]
     /// existing container to use
@@ -268,6 +268,13 @@ impl Arch {
         match self {
             Arch::ARM64 => "linux/arm64",
             Arch::X86_64 => "linux/amd64",
+        }
+    }
+
+    fn architecture_str(&self) -> &str {
+        match self {
+            Arch::ARM64 => "arm64",
+            Arch::X86_64 => "amd64",
         }
     }
 }
@@ -339,6 +346,7 @@ fn main() {
     };
 
     let arch = arch.unwrap_or_else(|| Arch::from_elf(p.header.e_machine).unwrap());
+    let image = image.unwrap_or_else(|| format!("rebg:{}", arch.architecture_str()));
     let id = container.unwrap_or_else(|| spawn_runner(&image, &arch));
 
     let cs = arch.make_capstone().unwrap();
