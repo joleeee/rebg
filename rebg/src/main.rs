@@ -4,8 +4,9 @@ use state::{Aarch64Step, State, Step, X64Step};
 use std::{
     collections::HashMap,
     fs,
+    io::{BufRead, BufReader, Read},
     path::PathBuf,
-    process::{exit, Command, Stdio},
+    process::{exit, Child, ChildStderr, ChildStdout, Command, Stdio},
     str::FromStr,
 };
 use syms::SymbolTable;
@@ -14,14 +15,65 @@ mod rstate;
 mod state;
 mod syms;
 
-fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
+struct RunningQemu {
+    #[allow(dead_code)]
+    stdout: BufReader<ChildStdout>,
+    stderr: BufReader<ChildStderr>,
+    child: Child,
+
+    stderr_bfr: String,
+}
+
+impl RunningQemu {
+    fn check_crash(&mut self) {
+        if let Some(result) = self.child.try_wait().unwrap() {
+            self.stderr.read_to_string(&mut self.stderr_bfr).unwrap();
+
+            if !result.success() {
+                println!(
+                    "QEMU Failed with code {} and err \"{}\"",
+                    result.code().unwrap(),
+                    self.stderr_bfr.trim(),
+                );
+                exit(1);
+            }
+        }
+    }
+}
+
+impl Iterator for RunningQemu {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // read until found a chunk
+
+        loop {
+            let split = self
+                .stderr_bfr
+                .split_once("----------------")
+                .map(|(a, b)| (a.to_string(), b.to_string()));
+
+            if let Some((before, after)) = split {
+                self.stderr_bfr = after.to_string();
+                return Some(before.to_string());
+            }
+
+            let result = self.stderr.read_line(&mut self.stderr_bfr).unwrap();
+            match result {
+                0 => {
+                    self.check_crash(); // make sure the reason we're done is not because of a crash
+                    return None; // EOF
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<RunningQemu> {
     // copy program into container
-    let cp = Command::new("cp")
-        .arg(program)
-        .arg("container/")
-        .spawn()
-        .unwrap();
-    cp.wait_with_output().unwrap();
+    let cp = Command::new("cp").arg(program).arg("container/").spawn()?;
+    cp.wait_with_output()?;
 
     // run qemu inside the container
     let guest_path = format!(
@@ -32,7 +84,8 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
             .to_str()
             .unwrap()
     );
-    let run = Command::new("docker")
+
+    let mut child = Command::new("docker")
         .arg("exec")
         .arg(id)
         .arg(arch.qemu_user_bin())
@@ -42,52 +95,39 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
         .stdin(Stdio::null()) // todo pass through from nc
         .stdout(Stdio::piped()) // same here
         .stderr(Stdio::piped()) // also use different file descriptors for qemu output so they dont collide
-        .spawn()
-        .unwrap();
+        .spawn()?;
 
     println!("Starting qemu");
-    // todo spawn new thread
-    let result = run.wait_with_output().unwrap();
+    // spawn new thread
 
-    if !result.status.success() {
-        println!(
-            "QEMU Failed with code {} and err \"{}\"",
-            result.status.code().unwrap(),
-            String::from_utf8(result.stderr).unwrap().trim()
-        );
-        exit(1);
-    }
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
 
-    Ok(String::from_utf8(result.stderr).unwrap())
+    let stdout = BufReader::new(stdout);
+    let stderr = BufReader::new(stderr);
+
+    Ok(RunningQemu {
+        stdout,
+        stderr,
+        stderr_bfr: String::new(),
+        child,
+    })
 }
 
-struct InitialParseResult {
-    remaining: Vec<String>,
-    elfs: HashMap<String, (u64, u64)>,
-}
-
-fn parse_elflibload(output: &str) -> anyhow::Result<InitialParseResult> {
-    let mut chunks = output
-        .split("----------------")
+fn parse_elflibload(output: &str) -> anyhow::Result<HashMap<String, (u64, u64)>> {
+    let chunk = output
+        .split('\n')
         .into_iter()
         .map(|x| x.trim())
-        .map(|chunk| {
-            chunk
-                .split('\n')
-                .into_iter()
-                .map(|x| x.trim())
-                .filter(|x| !matches!(*x, "" | "IN:"))
-        });
+        .filter(|x| !matches!(*x, "" | "IN:"));
 
-    let header_chunk: Vec<_> = chunks
-        .next()
-        .context("missing header")?
+    let parts: Vec<_> = chunk
         .map(|x| x.split_once('|'))
         .collect::<Option<Vec<_>>>()
         .context("invalid header, should only be | separated key|values")?;
 
     let mut elfs = HashMap::new();
-    for (key, value) in header_chunk {
+    for (key, value) in parts {
         match key {
             "elflibload" => {
                 let (path, other) = value.split_once('|').unwrap();
@@ -104,11 +144,7 @@ fn parse_elflibload(output: &str) -> anyhow::Result<InitialParseResult> {
         }
     }
 
-    let remaining = chunks
-        .map(|list| list.collect::<Vec<_>>().join("\n"))
-        .collect();
-
-    Ok(InitialParseResult { remaining, elfs })
+    Ok(elfs)
 }
 
 fn spawn_runner(image_name: &str, arch: &Arch) -> String {
@@ -290,7 +326,7 @@ fn main() {
 
     let cs = arch.make_capstone().unwrap();
 
-    let raw_output = run_qemu(&id, program.to_str().unwrap(), &arch).unwrap();
+    let mut output = run_qemu(&id, program.to_str().unwrap(), &arch).unwrap();
 
     let buffer = fs::read(&program).unwrap();
 
@@ -307,24 +343,22 @@ fn main() {
         program.file_name().unwrap().to_str().unwrap()
     );
 
-    let InitialParseResult { remaining, elfs } = parse_elflibload(&raw_output).unwrap();
+    let elfs = parse_elflibload(&output.next().unwrap()).unwrap();
     let main_binary = elfs.get(&program_path_inside).unwrap();
     let symbol_table = symbol_table.pie(main_binary.0);
 
     match arch {
         Arch::ARM64 => {
-            let trace: Vec<Aarch64Step> = remaining
-                .iter()
-                .map(|chunk| Aarch64Step::from_str(chunk))
+            let trace: Vec<_> = output
+                .map(|chunk| Aarch64Step::from_str(&chunk))
                 .collect::<anyhow::Result<Vec<_>>>()
                 .unwrap();
 
             print_trace(&trace, cs, Some(&symbol_table));
         }
         Arch::X86_64 => {
-            let trace: Vec<_> = remaining
-                .iter()
-                .map(|chunk| X64Step::from_str(chunk))
+            let trace: Vec<_> = output
+                .map(|chunk| X64Step::from_str(&chunk))
                 .collect::<anyhow::Result<Vec<_>>>()
                 .unwrap();
 
