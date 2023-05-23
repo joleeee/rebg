@@ -1,10 +1,8 @@
 use anyhow::Context;
 use capstone::{prelude::BuildsCapstone, Capstone};
-use hex::FromHex;
-use num_traits::Num;
+use state::{Aarch64Step, State, Step, X64Step};
 use std::{
     collections::HashMap,
-    fmt::{Debug, LowerHex},
     fs,
     path::PathBuf,
     process::{exit, Command, Stdio},
@@ -12,131 +10,9 @@ use std::{
 };
 use syms::SymbolTable;
 
-mod arch;
-use arch::{ARM64Step, Code, X64Step};
 mod rstate;
+mod state;
 mod syms;
-
-trait State: Clone {
-    fn print_diff(&self, other: &Self) -> bool;
-    fn register_name(&self, index: usize) -> String {
-        format!("r{}", index)
-    }
-}
-
-trait Step {
-    type Code: Code;
-    type State: State;
-    fn address(&self) -> u64;
-    fn code(&self) -> &Self::Code;
-    fn state(&self) -> &Self::State;
-    fn from_parts(address: u64, code: Self::Code, state: Self::State) -> Self;
-}
-
-pub struct StepStruct<C, R> {
-    address: u64,
-    code: C,
-    state: R,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CpuState<B, const N: usize> {
-    regs: [B; N],
-    pc: B,
-    flags: B,
-}
-
-impl<B, const N: usize> FromStr for CpuState<B, N>
-where
-    B: Num + Copy,
-    <B as Num>::FromStrRadixErr: Debug,
-{
-    type Err = anyhow::Error;
-
-    fn from_str(input: &str) -> anyhow::Result<Self> {
-        let regs = input
-            .split('|')
-            .map(|data| data.split_once('='))
-            .map(Option::unwrap)
-            .map(|(name, value)| (name.trim(), B::from_str_radix(value, 16).unwrap()));
-
-        let mut registers: [Option<B>; N] = [None; N];
-        let mut pc = None;
-        let mut flags = None;
-
-        for (name, value) in regs {
-            match name {
-                "pc" => {
-                    pc = Some(value);
-                }
-                "flags" => {
-                    flags = Some(value);
-                }
-                _ => {
-                    let index = name.strip_prefix('r').context("missing register prefix")?;
-                    let index = usize::from_str_radix(index, 10)?;
-                    registers[index] = Some(value);
-                }
-            }
-        }
-
-        let pc = pc.unwrap();
-        let flags = flags.unwrap();
-
-        if registers.contains(&None) {
-            return Err(anyhow::anyhow!("register not set"));
-        }
-        let registers = registers.map(Option::unwrap);
-
-        Ok(CpuState {
-            regs: registers,
-            pc,
-            flags,
-        })
-    }
-}
-
-struct QemuParser;
-
-impl QemuParser {
-    fn parse<'a, I, B, C, const N: usize, S: Step<State = CpuState<B, N>> + Step<Code = C>>(
-        input: I,
-    ) -> anyhow::Result<S>
-    where
-        I: Iterator<Item = &'a str>,
-        B: Num + Copy,
-        <B as Num>::FromStrRadixErr: Debug,
-        C: Code,
-        <C as FromHex>::Error: Debug,
-    {
-        let lines = input.filter_map(|x| x.split_once('|'));
-
-        let mut s_state = None;
-        let mut s_address = None;
-        let mut s_code = None;
-
-        for (what, content) in lines {
-            match what {
-                "regs" => {
-                    s_state = Some(CpuState::from_str(content)?);
-                }
-                "address" => {
-                    s_address = Some(u64::from_str_radix(content, 16)?);
-                }
-                "code" => {
-                    s_code = Some(C::from_hex(content).unwrap());
-                }
-                _ => panic!("unknown data"),
-            }
-        }
-
-        let address = s_address.unwrap();
-        let code = s_code.unwrap();
-        let state = s_state.unwrap();
-
-        Ok(S::from_parts(address, code, state))
-    }
-}
 
 fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
     // copy program into container
@@ -185,18 +61,12 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<String> {
     Ok(String::from_utf8(result.stderr).unwrap())
 }
 
-struct RunResult<C, B, const N: usize> {
-    binaries: HashMap<String, (u64, u64)>,
-    trace: Vec<StepStruct<C, CpuState<B, N>>>,
+struct InitialParseResult {
+    remaining: Vec<String>,
+    elfs: HashMap<String, (u64, u64)>,
 }
 
-fn parse_output<C, B, const N: usize>(output: &str) -> anyhow::Result<RunResult<C, B, N>>
-where
-    B: Num + Copy + Debug + LowerHex,
-    <B as Num>::FromStrRadixErr: Debug,
-    C: Code,
-    <C as FromHex>::Error: Debug,
-{
+fn parse_elflibload(output: &str) -> anyhow::Result<InitialParseResult> {
     let mut chunks = output
         .split("----------------")
         .into_iter()
@@ -234,12 +104,11 @@ where
         }
     }
 
-    let trace: Result<Vec<_>, _> = chunks.map(QemuParser::parse).collect();
+    let remaining = chunks
+        .map(|list| list.collect::<Vec<_>>().join("\n"))
+        .collect();
 
-    Ok(RunResult {
-        binaries: elfs,
-        trace: trace?,
-    })
+    Ok(InitialParseResult { remaining, elfs })
 }
 
 fn spawn_runner(image_name: &str, arch: &Arch) -> String {
@@ -357,21 +226,30 @@ impl Arch {
     }
 }
 
-fn print_trace<S: Step>(trace: &[S], cs: Capstone, syms: Option<&SymbolTable>) {
-    let mut previous_state: Option<<S as Step>::State> = None;
+fn print_trace<STATE, STEP, const N: usize, FLAGS>(
+    trace: &[STEP],
+    cs: Capstone,
+    syms: Option<&SymbolTable>,
+) where
+    STATE: State<N>,
+    STEP: Step<STATE, N, FLAGS>,
+{
+    let mut previous_state: Option<STATE> = None;
 
     for step in trace {
         if let Some(previous) = previous_state {
             let current = step.state();
-            if previous.print_diff(&current) {
-                println!("");
+
+            let diff = rstate::diff(&previous, current);
+            if diff.print::<STATE>() {
+                println!();
             }
         }
 
         let address = step.address();
         let code = step.code();
 
-        let disasm = cs.disasm_all(code.be_bytes(), address).unwrap();
+        let disasm = cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
         let disasm = disasm.first().unwrap();
         let dis_mn = disasm.mnemonic().unwrap();
@@ -386,7 +264,7 @@ fn print_trace<S: Step>(trace: &[S], cs: Capstone, syms: Option<&SymbolTable>) {
             format!("0x{:016x}", address)
         };
 
-        println!("{}: {:08x} {} {}", location, code, dis_mn, dis_op);
+        println!("{}: {} {} {}", location, hex::encode(code), dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
 
         previous_state = Some(step.state().clone());
@@ -408,7 +286,7 @@ fn main() {
         container,
     } = argh::from_env();
 
-    let id = container.unwrap_or(spawn_runner(&image, &arch));
+    let id = container.unwrap_or_else(|| spawn_runner(&image, &arch));
 
     let cs = arch.make_capstone().unwrap();
 
@@ -429,22 +307,26 @@ fn main() {
         program.file_name().unwrap().to_str().unwrap()
     );
 
+    let InitialParseResult { remaining, elfs } = parse_elflibload(&raw_output).unwrap();
+    let main_binary = elfs.get(&program_path_inside).unwrap();
+    let symbol_table = symbol_table.pie(main_binary.0);
+
     match arch {
         Arch::ARM64 => {
-            let result: RunResult<_, _, 32> = parse_output(&raw_output).unwrap();
-            let trace: Vec<ARM64Step> = result.trace;
-
-            let main_binary = result.binaries.get(&program_path_inside).unwrap();
-            let symbol_table = symbol_table.pie(main_binary.0);
+            let trace: Vec<Aarch64Step> = remaining
+                .iter()
+                .map(|chunk| Aarch64Step::from_str(chunk))
+                .collect::<anyhow::Result<Vec<_>>>()
+                .unwrap();
 
             print_trace(&trace, cs, Some(&symbol_table));
         }
         Arch::X86_64 => {
-            let result: RunResult<_, _, 16> = parse_output(&raw_output).unwrap();
-            let trace: Vec<X64Step> = result.trace;
-
-            let main_binary = result.binaries.get(&program_path_inside).unwrap();
-            let symbol_table = symbol_table.pie(main_binary.0);
+            let trace: Vec<_> = remaining
+                .iter()
+                .map(|chunk| X64Step::from_str(chunk))
+                .collect::<anyhow::Result<Vec<_>>>()
+                .unwrap();
 
             print_trace(&trace, cs, Some(&symbol_table));
         }

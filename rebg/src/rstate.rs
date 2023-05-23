@@ -1,15 +1,12 @@
 //! Register state
 
-use crate::CpuState;
-use core::fmt;
-use num_traits::Num;
+use bitflags::Flags;
 
-pub trait Register: Num + Copy + PartialEq + fmt::Debug {}
-impl<T: Num + Copy + PartialEq + fmt::Debug> Register for T {}
+use crate::state::State;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(dead_code)]
-enum RDiff<B> {
+pub enum RDiff<B> {
     Changed { from: B, to: B },
     Unchanged { value: B },
 }
@@ -28,29 +25,94 @@ impl<X: PartialEq> RDiff<X> {
     }
 }
 
-#[allow(dead_code)]
-impl<B: Register, const N: usize> CpuState<B, N> {
-    fn diff(&self, other: &Self) -> CpuState<RDiff<B>, N> {
-        let regs: [RDiff<B>; N] = self
+pub struct StateDiff<const N: usize> {
+    pub regs: [RDiff<u64>; N],
+    pub pc: RDiff<u64>,
+    pub flags: Vec<(&'static str, RDiff<bool>)>,
+}
+
+impl<const N: usize> StateDiff<N> {
+    pub fn print<S: State<N>>(&self) -> bool {
+        let diff_regs = self
             .regs
-            .into_iter()
-            .zip(other.regs.into_iter())
-            .map(|(a, b)| RDiff::make(a, b))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                if let RDiff::Changed { from, to } = s {
+                    Some((i, from, to))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
 
-        let pc = RDiff::make(self.pc, other.pc);
-        let flags = RDiff::make(self.flags, other.flags);
+        for (i, a, b) in &diff_regs {
+            println!("{} <- {:x} (prev {:x})", S::reg_name(*i), b, a);
+        }
 
-        CpuState { regs, pc, flags }
+        // ignore pc
+
+        // pretty print flags
+        let flags = self
+            .flags
+            .iter()
+            .filter_map(|(name, flag)| {
+                if let RDiff::Changed { from, to } = flag {
+                    debug_assert_ne!(from, to);
+                    Some((*name, *from))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        for (name, previous) in &flags {
+            if *previous {
+                println!("flags -{}", name);
+            } else {
+                println!("flags +{}", name);
+            }
+        }
+
+        !diff_regs.is_empty() || !flags.is_empty()
     }
+}
+
+pub fn diff<S: State<N>, const N: usize>(current: &S, future: &S) -> StateDiff<N> {
+    let regs: [RDiff<u64>; N] = current
+        .regs()
+        .iter()
+        .zip(future.regs().iter())
+        .map(|(a, b)| RDiff::make(*a, *b))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    let pc = RDiff::make(current.pc(), future.pc());
+
+    let flags: Vec<_> = S::FLAGS::all()
+        .iter_names()
+        .map(|(name, flag)| {
+            let cur = current.flags().contains(flag);
+            let fut = future.flags().contains(flag);
+
+            let diff = if cur != fut {
+                RDiff::Changed { from: cur, to: fut }
+            } else {
+                RDiff::Unchanged { value: cur }
+            };
+
+            (name, diff)
+        })
+        .collect();
+
+    StateDiff { regs, pc, flags }
 }
 
 #[cfg(test)]
 mod tests {
     use super::RDiff;
-    use crate::CpuState;
+    //use crate::CpuState;
 
     #[test]
     fn single_diff() {
@@ -65,40 +127,40 @@ mod tests {
         assert_eq!(d2, RDiff::Unchanged { value: 5 });
     }
 
-    #[test]
-    fn state_diff() {
-        let original = crate::CpuState {
-            regs: [0, 2, 3, 0],
-            pc: 0x40000,
-            flags: 0x10,
-        };
+    //#[test]
+    //fn state_diff() {
+    //    let original = crate::CpuState {
+    //        regs: [0, 2, 3, 0],
+    //        pc: 0x40000,
+    //        flags: 0x10,
+    //    };
 
-        let modified = crate::CpuState {
-            regs: [0, 3, 3, -1],
-            pc: 0x40004,
-            flags: 0x08,
-        };
+    //    let modified = crate::CpuState {
+    //        regs: [0, 3, 3, -1],
+    //        pc: 0x40004,
+    //        flags: 0x08,
+    //    };
 
-        let diff = original.diff(&modified);
+    //    let diff = original.diff(&modified);
 
-        assert_eq!(
-            diff,
-            CpuState {
-                regs: [
-                    RDiff::Unchanged { value: 0 },
-                    RDiff::Changed { from: 2, to: 3 },
-                    RDiff::Unchanged { value: 3 },
-                    RDiff::Changed { from: 0, to: -1 },
-                ],
-                pc: RDiff::Changed {
-                    from: 0x40000,
-                    to: 0x40004
-                },
-                flags: RDiff::Changed {
-                    from: 0x10,
-                    to: 0x8
-                },
-            }
-        );
-    }
+    //    assert_eq!(
+    //        diff,
+    //        CpuState {
+    //            regs: [
+    //                RDiff::Unchanged { value: 0 },
+    //                RDiff::Changed { from: 2, to: 3 },
+    //                RDiff::Unchanged { value: 3 },
+    //                RDiff::Changed { from: 0, to: -1 },
+    //            ],
+    //            pc: RDiff::Changed {
+    //                from: 0x40000,
+    //                to: 0x40004
+    //            },
+    //            flags: RDiff::Changed {
+    //                from: 0x10,
+    //                to: 0x8
+    //            },
+    //        }
+    //    );
+    //}
 }

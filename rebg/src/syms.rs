@@ -102,7 +102,7 @@ impl SymbolTable {
         self.symbols
             .iter()
             .find(|s| s.from <= adr && adr < s.to)
-            .map(|s| s.clone())
+            .cloned()
             .map(|s| SymbolReference {
                 offset: adr - s.from,
                 symbol: s,
