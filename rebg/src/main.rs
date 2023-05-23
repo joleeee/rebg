@@ -201,9 +201,9 @@ struct Arguments {
     #[argh(positional)]
     program: PathBuf,
 
-    #[argh(positional)]
+    #[argh(option, short = 'a')]
     /// architecture: arm, x64, ...
-    arch: Arch,
+    arch: Option<Arch>,
 
     #[argh(option, short = 'i', default = r#"String::from("rebg")"#)]
     /// docker image to use
@@ -225,6 +225,16 @@ impl argh::FromArgValue for Arch {
             "arm64" | "arm" | "aarch64" => Ok(Arch::ARM64),
             "x86_64" | "amd64" | "amd" | "x64" => Ok(Arch::X86_64),
             _ => Err(format!("Unknown arch: {}", value)),
+        }
+    }
+}
+
+impl Arch {
+    fn from_elf(machine: u16) -> anyhow::Result<Self> {
+        match machine {
+            0xB7 => Ok(Arch::ARM64),
+            0x3E => Ok(Arch::X86_64),
+            _ => Err(anyhow::anyhow!("Unknown machine: {}", machine)),
         }
     }
 }
@@ -322,19 +332,18 @@ fn main() {
         container,
     } = argh::from_env();
 
+    let buffer = fs::read(&program).unwrap();
+    let p = match goblin::Object::parse(&buffer).unwrap() {
+        goblin::Object::Elf(e) => e,
+        _ => todo!("only elf supported."),
+    };
+
+    let arch = arch.unwrap_or_else(|| Arch::from_elf(p.header.e_machine).unwrap());
     let id = container.unwrap_or_else(|| spawn_runner(&image, &arch));
 
     let cs = arch.make_capstone().unwrap();
 
     let mut output = run_qemu(&id, program.to_str().unwrap(), &arch).unwrap();
-
-    let buffer = fs::read(&program).unwrap();
-
-    let p = goblin::Object::parse(&buffer).unwrap();
-    let p = match p {
-        goblin::Object::Elf(e) => e,
-        _ => todo!("only elf supported."),
-    };
 
     let symbol_table = SymbolTable::from_elf(p);
 
