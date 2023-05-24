@@ -317,7 +317,7 @@ fn print_trace<STATE, STEP, const N: usize, FLAGS>(
             format!("0x{:016x}", address)
         };
 
-        println!("{}: {} {} {}", location, hex::encode(code), dis_mn, dis_op);
+        println!("{}: {} {}", location, dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
 
         previous_state = Some(step.state().clone());
