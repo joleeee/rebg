@@ -10,7 +10,7 @@ pub struct Aarch64Step {
     address: u64,
 }
 
-impl Step<Aarch64State, 32, Aarch64Flags> for Aarch64Step {
+impl Step<Aarch64State, 32> for Aarch64Step {
     fn code(&self) -> &[u8] {
         &self.code[..]
     }

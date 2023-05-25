@@ -12,7 +12,7 @@ pub mod x64;
 pub use x64::{X64Flags, X64State, X64Step};
 
 // This needs to be a trait because different architectures have different instruction sizes
-pub trait Step<S: State<N>, const N: usize, FLAGS>: Clone {
+pub trait Step<S: State<N>, const N: usize>: Clone {
     fn code(&self) -> &[u8];
     // this also contains the pc
     fn state(&self) -> &S;

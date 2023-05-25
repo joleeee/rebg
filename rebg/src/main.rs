@@ -279,13 +279,13 @@ impl Arch {
     }
 }
 
-fn print_trace<STATE, STEP, const N: usize, FLAGS>(
+fn print_trace<STATE, STEP, const N: usize>(
     trace: &[STEP],
     cs: Capstone,
     syms: Option<&SymbolTable>,
 ) where
     STATE: State<N>,
-    STEP: Step<STATE, N, FLAGS>,
+    STEP: Step<STATE, N>,
 {
     let mut previous_state: Option<STATE> = None;
 
