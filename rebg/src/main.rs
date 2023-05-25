@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     fmt, fs,
     io::{BufRead, BufReader},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, Command, Stdio},
     str::FromStr,
     sync::mpsc,
@@ -62,12 +62,9 @@ where
             }
 
             let result = stderr.read_line(&mut stderr_buf).unwrap();
-            match result {
-                0 => {
-                    // EOF
-                    return;
-                }
-                _ => {}
+            if result == 0 {
+                // EOF
+                return;
             }
         }
     });
@@ -341,11 +338,11 @@ fn main() {
     match arch {
         Arch::ARM64 => {
             let rx = parse_qemu(child).unwrap();
-            do_the_stuff::<Aarch64Step, 32>(&id, rx, &arch, program);
+            do_the_stuff::<Aarch64Step, 32>(&id, rx, &arch);
         }
         Arch::X86_64 => {
             let rx = parse_qemu(child).unwrap();
-            do_the_stuff::<X64Step, 16>(&id, rx, &arch, program);
+            do_the_stuff::<X64Step, 16>(&id, rx, &arch);
         }
     }
 }
@@ -363,7 +360,7 @@ fn read_file_from_docker(id: &str, path: PathBuf) -> anyhow::Result<Vec<u8>> {
     let realpath = realpath.trim();
 
     // copy it out
-    let output = Command::new("docker")
+    Command::new("docker")
         .arg("cp")
         .arg(format!("{}:{}", id, realpath))
         .arg("/tmp/rebg-tmp")
@@ -382,7 +379,6 @@ fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
     id: &str,
     rx: mpsc::Receiver<QemuMessage<STEP, N>>,
     arch: &Arch,
-    program: PathBuf,
 ) {
     let cs = arch.make_capstone().unwrap();
 
