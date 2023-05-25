@@ -10,7 +10,9 @@ pub struct X64Step {
     address: u64,
 }
 
-impl Step<X64State, 16> for X64Step {
+impl Step<16> for X64Step {
+    type STATE = X64State;
+
     fn code(&self) -> &[u8] {
         &self.code[..]
     }

@@ -279,22 +279,19 @@ impl Arch {
     }
 }
 
-fn print_trace<STATE, STEP, const N: usize>(
-    trace: &[STEP],
-    cs: Capstone,
-    syms: Option<&SymbolTable>,
-) where
-    STATE: State<N>,
-    STEP: Step<STATE, N>,
+fn print_trace<STEP, const N: usize>(trace: &[STEP], cs: Capstone, syms: Option<&SymbolTable>)
+where
+    <STEP as Step<N>>::STATE: State<N>,
+    STEP: Step<N>,
 {
-    let mut previous_state: Option<STATE> = None;
+    let mut previous_state: Option<STEP::STATE> = None;
 
     for step in trace {
         if let Some(previous) = previous_state {
             let current = step.state();
 
             let diff = rstate::diff(&previous, current);
-            if diff.print::<STATE>() {
+            if diff.print::<STEP::STATE>() {
                 println!();
             }
         }
