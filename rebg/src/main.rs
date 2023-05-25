@@ -4,9 +4,9 @@ use state::{Aarch64Step, State, Step, X64Step};
 use std::{
     collections::HashMap,
     fmt, fs,
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, BufReader},
     path::PathBuf,
-    process::{exit, Child, ChildStderr, ChildStdout, Command, Stdio},
+    process::{Child, Command, Stdio},
     str::FromStr,
     sync::mpsc,
     thread,
@@ -17,60 +17,6 @@ mod rstate;
 mod state;
 mod syms;
 
-struct RunningQemu {
-    #[allow(dead_code)]
-    stdout: BufReader<ChildStdout>,
-    stderr: BufReader<ChildStderr>,
-    child: Child,
-
-    stderr_bfr: String,
-}
-
-impl RunningQemu {
-    fn check_crash(&mut self) {
-        if let Some(result) = self.child.try_wait().unwrap() {
-            self.stderr.read_to_string(&mut self.stderr_bfr).unwrap();
-
-            if !result.success() {
-                println!(
-                    "QEMU Failed with code {} and err \"{}\"",
-                    result.code().unwrap(),
-                    self.stderr_bfr.trim(),
-                );
-                exit(1);
-            }
-        }
-    }
-}
-
-impl Iterator for RunningQemu {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // read until found a chunk
-
-        loop {
-            let split = self
-                .stderr_bfr
-                .split_once("----------------")
-                .map(|(a, b)| (a.to_string(), b.to_string()));
-
-            if let Some((before, after)) = split {
-                self.stderr_bfr = after.to_string();
-                return Some(before.to_string());
-            }
-
-            let result = self.stderr.read_line(&mut self.stderr_bfr).unwrap();
-            match result {
-                0 => {
-                    self.check_crash(); // make sure the reason we're done is not because of a crash
-                    return None; // EOF
-                }
-                _ => {}
-            }
-        }
-    }
-}
 #[derive(Debug)]
 enum QemuMessage<STEP, const N: usize>
 where
@@ -91,10 +37,7 @@ where
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
-        //let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();
-
-        //let mut stdout = BufReader::new(stdout);
         let mut stderr = BufReader::new(stderr);
 
         let mut stderr_buf = String::new();
@@ -105,7 +48,7 @@ where
                 .map(|(a, b)| (a.trim().to_string(), b.to_string()));
 
             if let Some((before, after)) = split {
-                stderr_buf = after.to_string();
+                stderr_buf = after;
 
                 if before.starts_with("elflibload") {
                     let e = parse_elflibload(&before).unwrap();
@@ -122,7 +65,6 @@ where
             match result {
                 0 => {
                     // EOF
-                    //panic!("EOF");
                     return;
                 }
                 _ => {}
