@@ -108,4 +108,10 @@ impl SymbolTable {
                 symbol: s,
             })
     }
+
+    pub fn merge(self, mut other: Self) -> Self {
+        let mut symbols = self.symbols;
+        symbols.append(&mut other.symbols);
+        Self { symbols }
+    }
 }

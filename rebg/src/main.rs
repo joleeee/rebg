@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     fmt, fs,
     io::{BufRead, BufReader},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     str::FromStr,
     sync::mpsc,
@@ -330,10 +330,7 @@ fn main() {
     } = argh::from_env();
 
     let buffer = fs::read(&program).unwrap();
-    let p = match goblin::Object::parse(&buffer).unwrap() {
-        goblin::Object::Elf(e) => e,
-        _ => todo!("only elf supported."),
-    };
+    let p = goblin::elf::Elf::parse(&buffer).unwrap();
 
     let arch = arch.unwrap_or_else(|| Arch::from_elf(p.header.e_machine).unwrap());
     let image = image.unwrap_or_else(|| format!("rebg:{}", arch.architecture_str()));
@@ -344,36 +341,74 @@ fn main() {
     match arch {
         Arch::ARM64 => {
             let rx = parse_qemu(child).unwrap();
-            do_the_stuff::<Aarch64Step, 32>(rx, p, &arch, program);
+            do_the_stuff::<Aarch64Step, 32>(&id, rx, &arch, program);
         }
         Arch::X86_64 => {
             let rx = parse_qemu(child).unwrap();
-            do_the_stuff::<X64Step, 16>(rx, p, &arch, program);
+            do_the_stuff::<X64Step, 16>(&id, rx, &arch, program);
         }
     }
 }
 
+fn read_file_from_docker(id: &str, path: PathBuf) -> anyhow::Result<Vec<u8>> {
+    // get the real path (annoying)
+    let output = Command::new("docker")
+        .arg("exec")
+        .arg(id)
+        .args(["realpath", path.to_str().unwrap()])
+        .output()?;
+
+    assert!(output.status.success());
+    let realpath = String::from_utf8(output.stdout).unwrap();
+    let realpath = realpath.trim();
+
+    // copy it out
+    let output = Command::new("docker")
+        .arg("cp")
+        .arg(format!("{}:{}", id, realpath))
+        .arg("/tmp/rebg-tmp")
+        .output()?;
+
+    // read it
+    let bytes = fs::read("/tmp/rebg-tmp")?;
+
+    // delete /tmp/rebg.tmp from the local machine
+    fs::remove_file("/tmp/rebg-tmp")?;
+
+    Ok(bytes)
+}
+
 fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
+    id: &str,
     rx: mpsc::Receiver<QemuMessage<STEP, N>>,
-    elf: goblin::elf::Elf,
     arch: &Arch,
     program: PathBuf,
 ) {
-    let symbol_table = SymbolTable::from_elf(elf);
     let cs = arch.make_capstone().unwrap();
-    let elfs = match rx.recv().unwrap() {
+
+    let offsets = match rx.recv().unwrap() {
         QemuMessage::ElfLoad(elfmsg) => elfmsg,
         _ => panic!("Expected elfmsg"),
     };
-    let program_path_inside = format!(
-        "/container/{}",
-        program.file_name().unwrap().to_str().unwrap()
-    );
-    let main_binary = elfs.get(&program_path_inside).unwrap();
-    let symbol_table = symbol_table.pie(main_binary.0);
+
+    // get symbol table from all binaries
+    let mut symbol_tables = Vec::new();
+    for path in offsets.keys() {
+        let contents = read_file_from_docker(id, path.into()).unwrap();
+        let elf = goblin::elf::Elf::parse(&contents).unwrap();
+
+        let pie = offsets.get(path).unwrap();
+        let table = SymbolTable::from_elf(elf).pie(pie.0);
+
+        symbol_tables.push(table);
+    }
+    // merge into a single table
+    let table = symbol_tables
+        .into_iter()
+        .reduce(|accum, item| accum.merge(item))
+        .unwrap();
 
     let mut trace = Vec::new();
-
     loop {
         let v = if let Ok(v) = rx.recv() {
             v
@@ -392,5 +427,5 @@ fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
         }
     }
 
-    print_trace(&trace, &cs, Some(&symbol_table));
+    print_trace(&trace, &cs, Some(&table));
 }
