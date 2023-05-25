@@ -3,11 +3,13 @@ use capstone::{prelude::BuildsCapstone, Capstone};
 use state::{Aarch64Step, State, Step, X64Step};
 use std::{
     collections::HashMap,
-    fs,
+    fmt, fs,
     io::{BufRead, BufReader, Read},
     path::PathBuf,
     process::{exit, Child, ChildStderr, ChildStdout, Command, Stdio},
     str::FromStr,
+    sync::mpsc,
+    thread,
 };
 use syms::SymbolTable;
 
@@ -69,8 +71,69 @@ impl Iterator for RunningQemu {
         }
     }
 }
+#[derive(Debug)]
+enum QemuMessage<STEP, const N: usize>
+where
+    STEP: Step<N>,
+{
+    ElfLoad(HashMap<String, (u64, u64)>),
+    // todo, could send a Update(Rx<Step>) here...
+    Step(STEP),
+}
 
-fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<RunningQemu> {
+fn parse_qemu<STEP, const N: usize>(
+    mut child: Child,
+) -> anyhow::Result<mpsc::Receiver<QemuMessage<STEP, N>>>
+where
+    STEP: Step<N> + Send + 'static + FromStr + fmt::Debug,
+    STEP::Err: fmt::Debug,
+{
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        //let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        //let mut stdout = BufReader::new(stdout);
+        let mut stderr = BufReader::new(stderr);
+
+        let mut stderr_buf = String::new();
+
+        loop {
+            let split = stderr_buf
+                .split_once("----------------")
+                .map(|(a, b)| (a.trim().to_string(), b.to_string()));
+
+            if let Some((before, after)) = split {
+                stderr_buf = after.to_string();
+
+                if before.starts_with("elflibload") {
+                    let e = parse_elflibload(&before).unwrap();
+                    let e = QemuMessage::ElfLoad(e);
+                    tx.send(e).unwrap();
+                } else {
+                    let s = STEP::from_str(&before).unwrap();
+                    let s = QemuMessage::Step(s);
+                    tx.send(s).unwrap();
+                }
+            }
+
+            let result = stderr.read_line(&mut stderr_buf).unwrap();
+            match result {
+                0 => {
+                    // EOF
+                    //panic!("EOF");
+                    return;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    Ok(rx)
+}
+
+fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<Child> {
     // copy program into container
     let cp = Command::new("cp").arg(program).arg("container/").spawn()?;
     cp.wait_with_output()?;
@@ -85,7 +148,9 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<RunningQemu>
             .unwrap()
     );
 
-    let mut child = Command::new("docker")
+    println!("Starting qemu");
+
+    let child = Command::new("docker")
         .arg("exec")
         .arg(id)
         .arg(arch.qemu_user_bin())
@@ -97,21 +162,7 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<RunningQemu>
         .stderr(Stdio::piped()) // also use different file descriptors for qemu output so they dont collide
         .spawn()?;
 
-    println!("Starting qemu");
-    // spawn new thread
-
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-
-    let stdout = BufReader::new(stdout);
-    let stderr = BufReader::new(stderr);
-
-    Ok(RunningQemu {
-        stdout,
-        stderr,
-        stderr_bfr: String::new(),
-        child,
-    })
+    Ok(child)
 }
 
 fn parse_elflibload(output: &str) -> anyhow::Result<HashMap<String, (u64, u64)>> {
@@ -279,7 +330,7 @@ impl Arch {
     }
 }
 
-fn print_trace<STEP, const N: usize>(trace: &[STEP], cs: Capstone, syms: Option<&SymbolTable>)
+fn print_trace<STEP, const N: usize>(trace: &[STEP], cs: &Capstone, syms: Option<&SymbolTable>)
 where
     <STEP as Step<N>>::STATE: State<N>,
     STEP: Step<N>,
@@ -346,37 +397,58 @@ fn main() {
     let image = image.unwrap_or_else(|| format!("rebg:{}", arch.architecture_str()));
     let id = container.unwrap_or_else(|| spawn_runner(&image, &arch));
 
+    let child = run_qemu(&id, program.to_str().unwrap(), &arch).unwrap();
+
+    match arch {
+        Arch::ARM64 => {
+            let rx = parse_qemu(child).unwrap();
+            do_the_stuff::<Aarch64Step, 32>(rx, p, &arch, program);
+        }
+        Arch::X86_64 => {
+            let rx = parse_qemu(child).unwrap();
+            do_the_stuff::<X64Step, 16>(rx, p, &arch, program);
+        }
+    }
+}
+
+fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
+    rx: mpsc::Receiver<QemuMessage<STEP, N>>,
+    elf: goblin::elf::Elf,
+    arch: &Arch,
+    program: PathBuf,
+) {
+    let symbol_table = SymbolTable::from_elf(elf);
     let cs = arch.make_capstone().unwrap();
-
-    let mut output = run_qemu(&id, program.to_str().unwrap(), &arch).unwrap();
-
-    let symbol_table = SymbolTable::from_elf(p);
-
+    let elfs = match rx.recv().unwrap() {
+        QemuMessage::ElfLoad(elfmsg) => elfmsg,
+        _ => panic!("Expected elfmsg"),
+    };
     let program_path_inside = format!(
         "/container/{}",
         program.file_name().unwrap().to_str().unwrap()
     );
-
-    let elfs = parse_elflibload(&output.next().unwrap()).unwrap();
     let main_binary = elfs.get(&program_path_inside).unwrap();
     let symbol_table = symbol_table.pie(main_binary.0);
 
-    match arch {
-        Arch::ARM64 => {
-            let trace: Vec<_> = output
-                .map(|chunk| Aarch64Step::from_str(&chunk))
-                .collect::<anyhow::Result<Vec<_>>>()
-                .unwrap();
+    let mut trace = Vec::new();
 
-            print_trace(&trace, cs, Some(&symbol_table));
-        }
-        Arch::X86_64 => {
-            let trace: Vec<_> = output
-                .map(|chunk| X64Step::from_str(&chunk))
-                .collect::<anyhow::Result<Vec<_>>>()
-                .unwrap();
+    loop {
+        let v = if let Ok(v) = rx.recv() {
+            v
+        } else {
+            // stop on error (presumably other end is dropped)
+            break;
+        };
 
-            print_trace(&trace, cs, Some(&symbol_table));
+        match v {
+            QemuMessage::Step(step) => {
+                trace.push(step);
+            }
+            QemuMessage::ElfLoad(_) => {
+                panic!("Unexpected elf load");
+            }
         }
     }
+
+    print_trace(&trace, &cs, Some(&symbol_table));
 }
