@@ -27,7 +27,6 @@ impl Step<16> for X64Step {
 }
 
 bitflags! {
-    // this should be the same as aarch32?
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct X64Flags: u32 {
         const CARRY = 1 << 0;
