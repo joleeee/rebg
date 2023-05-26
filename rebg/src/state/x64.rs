@@ -8,6 +8,7 @@ pub struct X64Step {
     state: X64State,
     code: Vec<u8>,
     address: u64,
+    strace: Option<String>,
 }
 
 impl Step<16> for X64Step {
@@ -23,6 +24,10 @@ impl Step<16> for X64Step {
 
     fn address(&self) -> u64 {
         self.address
+    }
+
+    fn strace(&self) -> Option<&String> {
+        self.strace.as_ref()
     }
 }
 
@@ -100,6 +105,7 @@ impl FromStr for X64Step {
             state: generic.state,
             code: generic.code,
             address: generic.address,
+            strace: generic.strace,
         })
     }
 }

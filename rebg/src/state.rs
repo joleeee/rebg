@@ -19,6 +19,7 @@ pub trait Step<const N: usize>: Clone {
     fn state(&self) -> &Self::STATE;
     // sometimes they differ, though, so also keep address
     fn address(&self) -> u64;
+    fn strace(&self) -> Option<&String>;
 }
 
 pub trait State<const N: usize>: Clone {
@@ -91,6 +92,7 @@ struct GenericStep<STATE: FromStr> {
     state: STATE,
     code: Vec<u8>,
     address: u64,
+    strace: Option<String>,
 }
 
 impl<STATE> FromStr for GenericStep<STATE>
@@ -105,6 +107,9 @@ where
         let mut s_state = None;
         let mut s_address = None;
         let mut s_code = None;
+
+        let mut partial_strace = None;
+        let mut strace = None;
 
         for (what, content) in lines {
             match what {
@@ -123,7 +128,37 @@ where
                 "code" => {
                     s_code = Some(Vec::from_hex(content).unwrap());
                 }
-                _ => panic!("unknown data"),
+                "strace" => {
+                    let content = {
+                        let (pid, data) = content.split_once('|').expect("missing pid");
+                        assert!(pid.starts_with("pid="));
+                        data
+                    };
+
+                    let content = content
+                        .strip_prefix("contents=")
+                        .expect("missing content= prefix");
+
+                    if let Some((data, _end)) = content.split_once("|sdone") {
+                        strace = Some(data.to_string())
+                    } else {
+                        partial_strace = Some(content)
+                    }
+                }
+                _ => {
+                    // might be the end of an strace
+                    if let Some((data, _end)) = content.split_once("|sdone") {
+                        strace = Some(
+                            partial_strace
+                                .expect("extending strace without a start")
+                                .to_string()
+                                + data,
+                        );
+                        partial_strace = None;
+                    } else {
+                        panic!("unknown data {}|{}", what, content)
+                    }
+                }
             }
         }
 
@@ -131,10 +166,16 @@ where
         let code = s_code.unwrap();
         let state = s_state.unwrap();
 
+        // otherwise incomplete
+        if strace.is_some() {
+            assert!(partial_strace.is_none());
+        }
+
         Ok(Self {
             state,
             code,
             address,
+            strace,
         })
     }
 }

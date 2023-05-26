@@ -3,11 +3,12 @@ use std::str::FromStr;
 use super::{GenericState, GenericStep, State, Step};
 use bitflags::bitflags;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Aarch64Step {
     state: Aarch64State,
     code: [u8; 4],
     address: u64,
+    strace: Option<String>,
 }
 
 impl Step<32> for Aarch64Step {
@@ -23,6 +24,10 @@ impl Step<32> for Aarch64Step {
 
     fn address(&self) -> u64 {
         self.address
+    }
+
+    fn strace(&self) -> Option<&String> {
+        self.strace.as_ref()
     }
 }
 
@@ -114,6 +119,7 @@ impl FromStr for Aarch64Step {
             state: generic.state,
             code: generic.code.try_into().unwrap(),
             address: generic.address,
+            strace: generic.strace,
         })
     }
 }

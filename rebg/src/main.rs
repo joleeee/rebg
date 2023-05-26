@@ -94,7 +94,7 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<Child> {
         .arg(id)
         .arg(arch.qemu_user_bin())
         .arg("-one-insn-per-tb")
-        .args(["-d", "in_asm"])
+        .args(["-d", "in_asm,strace"])
         .arg(guest_path)
         .stdin(Stdio::null()) // todo pass through from nc
         .stdout(Stdio::piped()) // same here
@@ -308,6 +308,10 @@ where
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
         // EDIT: it seems like it happens when branching to somewhere doing a syscall. it results in two regs| messages, and the last one is the one that "counts"..., i guess where it jump to after the syscall is done or something...?
         assert_eq!(address, step.state().pc());
+
+        if let Some(strace) = step.strace() {
+            println!("syscall: {}", strace);
+        }
 
         previous_state = Some(step.state().clone());
     }
