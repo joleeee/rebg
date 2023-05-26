@@ -306,6 +306,8 @@ where
 
         println!("{}: {} {}", location, dis_mn, dis_op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
+        // EDIT: it seems like it happens when branching to somewhere doing a syscall. it results in two regs| messages, and the last one is the one that "counts"..., i guess where it jump to after the syscall is done or something...?
+        assert_eq!(address, step.state().pc());
 
         previous_state = Some(step.state().clone());
     }

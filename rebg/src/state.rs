@@ -109,7 +109,11 @@ where
         for (what, content) in lines {
             match what {
                 "regs" => {
-                    s_state = Some(STATE::from_str(content)?);
+                    s_state = if let Some(prev) = s_state {
+                        Some(prev)
+                    } else {
+                        Some(STATE::from_str(content)?)
+                    };
                 }
                 "address" => {
                     s_address = Some(
