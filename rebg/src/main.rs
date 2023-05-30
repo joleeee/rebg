@@ -281,9 +281,8 @@ where
             let current = step.state();
 
             let diff = rstate::diff(&previous, current);
-            if diff.print::<STEP::STATE>() {
-                println!();
-            }
+            diff.print::<STEP::STATE>();
+            println!();
         }
 
         let address = step.address();
