@@ -8,10 +8,10 @@ use std::{
     path::PathBuf,
     process::{Child, Command, Stdio},
     str::FromStr,
-    sync::mpsc,
     thread,
 };
 use syms::SymbolTable;
+use flume;
 
 mod rstate;
 mod state;
@@ -29,12 +29,12 @@ where
 
 fn parse_qemu<STEP, const N: usize>(
     mut child: Child,
-) -> anyhow::Result<mpsc::Receiver<QemuMessage<STEP, N>>>
+) -> anyhow::Result<flume::Receiver<QemuMessage<STEP, N>>>
 where
     STEP: Step<N> + Send + 'static + FromStr + fmt::Debug,
     STEP::Err: fmt::Debug,
 {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = flume::unbounded();
 
     thread::spawn(move || {
         let stderr = child.stderr.take().unwrap();
@@ -383,7 +383,7 @@ fn read_file_from_docker(id: &str, path: PathBuf) -> anyhow::Result<Vec<u8>> {
 
 fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
     id: &str,
-    rx: mpsc::Receiver<QemuMessage<STEP, N>>,
+    rx: flume::Receiver<QemuMessage<STEP, N>>,
     arch: &Arch,
 ) {
     let cs = arch.make_capstone().unwrap();
