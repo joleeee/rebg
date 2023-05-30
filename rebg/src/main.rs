@@ -1,5 +1,6 @@
 use anyhow::Context;
 use capstone::{prelude::BuildsCapstone, Capstone};
+use flume;
 use state::{Aarch64Step, State, Step, X64Step};
 use std::{
     collections::HashMap,
@@ -11,7 +12,6 @@ use std::{
     thread,
 };
 use syms::SymbolTable;
-use flume;
 
 mod rstate;
 mod state;
@@ -412,11 +412,9 @@ fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
 
     let mut trace = Vec::new();
     loop {
-        let v = if let Ok(v) = rx.recv() {
-            v
-        } else {
-            // stop on error (presumably other end is dropped)
-            break;
+        let v = match rx.recv() {
+            Ok(v) => v,
+            Err(flume::RecvError::Disconnected) => break,
         };
 
         match v {
