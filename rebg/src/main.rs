@@ -1,6 +1,8 @@
 use anyhow::Context;
 use capstone::{prelude::BuildsCapstone, Capstone};
 use flume;
+use lazy_static::lazy_static;
+use regex::Regex;
 use state::{Aarch64Step, State, Step, X64Step};
 use std::{
     collections::HashMap,
@@ -97,7 +99,9 @@ where
                 let result = child.wait_with_output().unwrap();
 
                 match current_tx {
-                    CurrentTx::Header(_) => panic!("program quit before sending header"),
+                    CurrentTx::Header(_) => {
+                        panic!("program quit before sending header {:?}", result)
+                    }
                     CurrentTx::Body(ref btx) => btx.send(QemuMessage::Final(result)).unwrap(),
                 };
 
@@ -302,6 +306,47 @@ impl Arch {
     }
 }
 
+fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r#"(.*)#0x([0-9a-fA-F]*)(.*)"#).unwrap();
+    }
+
+    let mn = inst.mnemonic().unwrap();
+    let op = inst.op_str().unwrap();
+
+    let op = match RE.captures(op).zip(table) {
+        Some((caps, table)) => {
+            let mut caps = caps.iter();
+
+            let _whole = caps.next().unwrap().unwrap().as_str();
+
+            let parts: Vec<_> = caps.map(|x| x.unwrap()).map(|x| x.as_str()).collect();
+
+            let (first, rest) = parts.split_first().unwrap();
+            let (last, middle) = rest.split_last().unwrap();
+
+            let mut middle: Vec<_> = middle
+                .iter()
+                .map(|x| u64::from_str_radix(x, 16).unwrap())
+                .map(|x| match table.lookup(x) {
+                    Some(sym) => format!("#<{}>", sym),
+                    None => format!("#0x{:x}", x),
+                })
+                .collect();
+
+            let mut strs = vec![];
+            strs.push(first.to_string());
+            strs.append(&mut middle);
+            strs.push(last.to_string());
+
+            strs.join("")
+        }
+        None => op.to_string(),
+    };
+
+    format!("{} {}", mn, op)
+}
+
 fn print_trace<STEP, const N: usize>(trace: &[STEP], cs: &Capstone, syms: Option<&SymbolTable>)
 where
     <STEP as Step<N>>::STATE: State<N>,
@@ -323,9 +368,7 @@ where
 
         let disasm = cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
-        let disasm = disasm.first().unwrap();
-        let dis_mn = disasm.mnemonic().unwrap();
-        let dis_op = disasm.op_str().unwrap();
+        let op = inst_to_str(disasm.first().unwrap(), syms);
 
         let symbol = syms.and_then(|s| s.lookup(address));
 
@@ -336,7 +379,7 @@ where
             format!("0x{:016x}", address)
         };
 
-        println!("{}: {} {}", location, dis_mn, dis_op);
+        println!("{}: {}", location, op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
         // EDIT: it seems like it happens when branching to somewhere doing a syscall. it results in two regs| messages, and the last one is the one that "counts"..., i guess where it jump to after the syscall is done or something...?
         assert_eq!(address, step.state().pc());
