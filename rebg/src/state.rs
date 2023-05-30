@@ -131,14 +131,14 @@ struct GenericStep<STATE: FromStr> {
     memory_ops: Vec<MemoryOp>,
 }
 
-impl<STATE> FromStr for GenericStep<STATE>
+impl<STATE> TryFrom<&[String]> for GenericStep<STATE>
 where
     STATE: FromStr<Err = anyhow::Error>,
 {
-    type Err = anyhow::Error;
+    type Error = anyhow::Error;
 
-    fn from_str(input: &str) -> anyhow::Result<Self> {
-        let lines = input.split('\n').filter_map(|x| x.split_once('|'));
+    fn try_from(input: &[String]) -> anyhow::Result<Self> {
+        let lines = input.iter().filter_map(|x| x.split_once('|'));
 
         let mut s_state = None;
         let mut s_address = None;

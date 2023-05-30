@@ -114,11 +114,11 @@ impl FromStr for Aarch64State {
     }
 }
 
-impl FromStr for Aarch64Step {
-    type Err = anyhow::Error;
+impl TryFrom<&[String]> for Aarch64Step {
+    type Error = anyhow::Error;
 
-    fn from_str(input: &str) -> anyhow::Result<Self> {
-        let generic: GenericStep<Aarch64State> = GenericStep::from_str(input)?;
+    fn try_from(input: &[String]) -> anyhow::Result<Self> {
+        let generic: GenericStep<Aarch64State> = GenericStep::try_from(input)?;
 
         Ok(Self {
             state: generic.state,

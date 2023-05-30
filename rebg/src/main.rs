@@ -8,7 +8,6 @@ use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
     process::{Child, Command, Stdio},
-    str::FromStr,
     thread,
 };
 use syms::SymbolTable;
@@ -33,8 +32,8 @@ fn parse_qemu<STEP, const N: usize>(
     mut child: Child,
 ) -> anyhow::Result<flume::Receiver<QemuMessage<STEP, N>>>
 where
-    STEP: Step<N> + Send + 'static + FromStr + fmt::Debug,
-    STEP::Err: fmt::Debug,
+    STEP: Step<N> + Send + 'static + fmt::Debug,
+    STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
 {
     let (tx, rx) = flume::unbounded();
 
@@ -42,32 +41,34 @@ where
         let stderr = child.stderr.take().unwrap();
         let mut stderr = BufReader::new(stderr);
 
-        let mut stderr_buf = String::new();
+        let mut lines: Vec<String> = vec![];
 
         loop {
-            let split = stderr_buf
-                .split_once("----------------")
-                .map(|(a, b)| (a.trim().to_string(), b.to_string()));
+            let done = lines.last().map(|x| x.as_str()) == Some(&"----------------");
 
-            if let Some((before, after)) = split {
-                stderr_buf = after;
+            if done {
+                lines.pop();
 
-                if before.starts_with("elflibload") {
-                    let e = parse_elflibload(&before).unwrap();
+                if lines[0].starts_with("elflibload") {
+                    let e = parse_elflibload(&lines).unwrap();
                     let e = QemuMessage::ElfLoad(e);
                     tx.send(e).unwrap();
                 } else {
-                    let s = STEP::from_str(&before).unwrap();
+                    let s = STEP::try_from(&lines).unwrap();
                     let s = QemuMessage::Step(s);
                     tx.send(s).unwrap();
                 }
+
+                lines.clear();
             }
 
+            let mut stderr_buf = String::new();
             let result = stderr.read_line(&mut stderr_buf).unwrap();
             if result == 0 {
                 // EOF
                 return;
             }
+            lines.push(stderr_buf.strip_suffix('\n').unwrap().to_string());
         }
     });
 
@@ -106,14 +107,9 @@ fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<Child> {
     Ok(child)
 }
 
-fn parse_elflibload(output: &str) -> anyhow::Result<HashMap<String, (u64, u64)>> {
-    let chunk = output
-        .split('\n')
-        .into_iter()
-        .map(|x| x.trim())
-        .filter(|x| !matches!(*x, "" | "IN:"));
-
-    let parts: Vec<_> = chunk
+fn parse_elflibload(output: &[String]) -> anyhow::Result<HashMap<String, (u64, u64)>> {
+    let parts: Vec<_> = output
+        .iter()
         .map(|x| x.split_once('|'))
         .collect::<Option<Vec<_>>>()
         .context("invalid header, should only be | separated key|values")?;
