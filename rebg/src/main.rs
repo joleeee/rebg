@@ -33,6 +33,7 @@ where
     STEP: Step<N>,
 {
     Step(STEP),
+    Final(std::process::Output),
 }
 
 fn parse_qemu<STEP, const N: usize>(
@@ -91,6 +92,15 @@ where
             let result = stderr.read_line(&mut stderr_buf).unwrap();
             if result == 0 {
                 // EOF
+
+                // now make sure it closed gracefully
+                let result = child.wait_with_output().unwrap();
+
+                match current_tx {
+                    CurrentTx::Header(_) => panic!("program quit before sending header"),
+                    CurrentTx::Body(ref btx) => btx.send(QemuMessage::Final(result)).unwrap(),
+                };
+
                 return;
             }
             lines.push(stderr_buf.strip_suffix('\n').unwrap().to_string());
@@ -453,18 +463,36 @@ fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
         .unwrap();
 
     let mut trace = Vec::new();
-    loop {
+    let result = loop {
         let v = match rx.recv() {
             Ok(v) => v,
-            Err(flume::RecvError::Disconnected) => break,
+            Err(flume::RecvError::Disconnected) => panic!("premature disconnect"),
         };
 
         match v {
             QemuMessage::Step(step) => {
                 trace.push(step);
             }
+            QemuMessage::Final(f) => {
+                // make sure it's done
+                match rx.recv() {
+                    Err(flume::RecvError::Disconnected) => (),
+                    Ok(_) => panic!("Got message after final"),
+                }
+                break f;
+            }
         }
-    }
+    };
 
     print_trace(&trace, &cs, Some(&table));
+
+    if !result.status.success() {
+        println!("Failed with code: {}", result.status);
+    }
+    if !result.stdout.is_empty() {
+        println!("stdout:\n{}", String::from_utf8(result.stdout).unwrap());
+    }
+    if !result.stderr.is_empty() {
+        println!("stderr:\n{}", String::from_utf8(result.stderr).unwrap());
+    }
 }
