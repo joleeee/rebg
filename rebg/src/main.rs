@@ -19,23 +19,40 @@ mod state;
 mod syms;
 
 #[derive(Debug)]
-enum QemuMessage<STEP, const N: usize>
+enum QemuHeader<STEP, const N: usize>
 where
     STEP: Step<N>,
 {
     ElfLoad(HashMap<String, (u64, u64)>),
-    // todo, could send a Update(Rx<Step>) here...
+    Upgrade(flume::Receiver<QemuMessage<STEP, N>>),
+}
+
+#[derive(Debug)]
+enum QemuMessage<STEP, const N: usize>
+where
+    STEP: Step<N>,
+{
     Step(STEP),
 }
 
 fn parse_qemu<STEP, const N: usize>(
     mut child: Child,
-) -> anyhow::Result<flume::Receiver<QemuMessage<STEP, N>>>
+) -> anyhow::Result<flume::Receiver<QemuHeader<STEP, N>>>
 where
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
 {
-    let (tx, rx) = flume::unbounded();
+    let (header_tx, header_rx) = flume::unbounded();
+
+    enum CurrentTx<STEP, const N: usize>
+    where
+        STEP: Step<N>,
+    {
+        Header(flume::Sender<QemuHeader<STEP, N>>),
+        Body(flume::Sender<QemuMessage<STEP, N>>),
+    }
+
+    let mut current_tx = CurrentTx::Header(header_tx);
 
     thread::spawn(move || {
         let stderr = child.stderr.take().unwrap();
@@ -49,14 +66,22 @@ where
             if done {
                 lines.pop();
 
-                if lines[0].starts_with("elflibload") {
-                    let e = parse_elflibload(&lines).unwrap();
-                    let e = QemuMessage::ElfLoad(e);
-                    tx.send(e).unwrap();
-                } else {
-                    let s = STEP::try_from(&lines).unwrap();
-                    let s = QemuMessage::Step(s);
-                    tx.send(s).unwrap();
+                match current_tx {
+                    CurrentTx::Header(ref htx) => {
+                        let e = parse_elflibload(&lines).unwrap();
+                        let e = QemuHeader::ElfLoad(e);
+                        htx.send(e).unwrap();
+
+                        // switch to body
+                        let (btx, brx) = flume::unbounded();
+                        htx.send(QemuHeader::Upgrade(brx)).unwrap();
+                        current_tx = CurrentTx::Body(btx);
+                    }
+                    CurrentTx::Body(ref btx) => {
+                        let s = STEP::try_from(&lines).unwrap();
+                        let s = QemuMessage::Step(s);
+                        btx.send(s).unwrap();
+                    }
                 }
 
                 lines.clear();
@@ -72,7 +97,7 @@ where
         }
     });
 
-    Ok(rx)
+    Ok(header_rx)
 }
 
 fn run_qemu(id: &str, program: &str, arch: &Arch) -> anyhow::Result<Child> {
@@ -397,14 +422,19 @@ fn read_file_from_docker(id: &str, path: PathBuf) -> anyhow::Result<Vec<u8>> {
 
 fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
     id: &str,
-    rx: flume::Receiver<QemuMessage<STEP, N>>,
+    rx: flume::Receiver<QemuHeader<STEP, N>>,
     arch: &Arch,
 ) {
     let cs = arch.make_capstone().unwrap();
 
     let offsets = match rx.recv().unwrap() {
-        QemuMessage::ElfLoad(elfmsg) => elfmsg,
+        QemuHeader::ElfLoad(elfmsg) => elfmsg,
         _ => panic!("Expected elfmsg"),
+    };
+
+    let rx = match rx.recv().unwrap() {
+        QemuHeader::Upgrade(brx) => brx,
+        _ => panic!("Expected upgrade"),
     };
 
     // get symbol table from all binaries
@@ -434,9 +464,6 @@ fn do_the_stuff<STEP: Step<N> + fmt::Debug, const N: usize>(
         match v {
             QemuMessage::Step(step) => {
                 trace.push(step);
-            }
-            QemuMessage::ElfLoad(_) => {
-                panic!("Unexpected elf load");
             }
         }
     }
