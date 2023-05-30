@@ -336,20 +336,18 @@ where
         }
 
         // only print memory changes if we're in the user binary
-        if symbol.is_some() {
-            for MemoryOp {
-                address,
-                kind,
-                value,
-            } in step.memory_ops()
-            {
-                let arrow = match kind {
-                    MemoryOpKind::Read => "->",
-                    MemoryOpKind::Write => "<-",
-                };
+        for MemoryOp {
+            address,
+            kind,
+            value,
+        } in step.memory_ops()
+        {
+            let arrow = match kind {
+                MemoryOpKind::Read => "->",
+                MemoryOpKind::Write => "<-",
+            };
 
-                println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
-            }
+            println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
         }
 
         previous_state = Some(step.state().clone());
