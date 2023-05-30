@@ -13,6 +13,8 @@ use std::{
 };
 use syms::SymbolTable;
 
+use crate::state::{MemoryOp, MemoryOpKind};
+
 mod rstate;
 mod state;
 mod syms;
@@ -296,7 +298,7 @@ where
 
         let symbol = syms.and_then(|s| s.lookup(address));
 
-        let location = if let Some(symbol) = symbol {
+        let location = if let Some(ref symbol) = symbol {
             let symbol = format!("<{}>", symbol);
             format!("{:>18}", symbol)
         } else {
@@ -310,6 +312,23 @@ where
 
         if let Some(strace) = step.strace() {
             println!("syscall: {}", strace);
+        }
+
+        // only print memory changes if we're in the user binary
+        if symbol.is_some() {
+            for MemoryOp {
+                address,
+                kind,
+                value,
+            } in step.memory_ops()
+            {
+                let arrow = match kind {
+                    MemoryOpKind::Read => "->",
+                    MemoryOpKind::Write => "<-",
+                };
+
+                println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
+            }
         }
 
         previous_state = Some(step.state().clone());

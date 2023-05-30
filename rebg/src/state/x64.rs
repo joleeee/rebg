@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::{GenericState, GenericStep, State, Step};
+use super::{GenericState, GenericStep, MemoryOp, State, Step};
 use bitflags::bitflags;
 
 #[derive(Clone, Debug)]
@@ -9,6 +9,7 @@ pub struct X64Step {
     code: Vec<u8>,
     address: u64,
     strace: Option<String>,
+    memory_ops: Vec<MemoryOp>,
 }
 
 impl Step<16> for X64Step {
@@ -28,6 +29,10 @@ impl Step<16> for X64Step {
 
     fn strace(&self) -> Option<&String> {
         self.strace.as_ref()
+    }
+
+    fn memory_ops(&self) -> &[super::MemoryOp] {
+        &self.memory_ops
     }
 }
 
@@ -106,6 +111,7 @@ impl FromStr for X64Step {
             code: generic.code,
             address: generic.address,
             strace: generic.strace,
+            memory_ops: generic.memory_ops,
         })
     }
 }

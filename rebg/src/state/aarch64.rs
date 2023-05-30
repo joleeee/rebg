@@ -9,6 +9,7 @@ pub struct Aarch64Step {
     code: [u8; 4],
     address: u64,
     strace: Option<String>,
+    memory_ops: Vec<super::MemoryOp>,
 }
 
 impl Step<32> for Aarch64Step {
@@ -28,6 +29,10 @@ impl Step<32> for Aarch64Step {
 
     fn strace(&self) -> Option<&String> {
         self.strace.as_ref()
+    }
+
+    fn memory_ops(&self) -> &[super::MemoryOp] {
+        &self.memory_ops[..]
     }
 }
 
@@ -120,6 +125,7 @@ impl FromStr for Aarch64Step {
             code: generic.code.try_into().unwrap(),
             address: generic.address,
             strace: generic.strace,
+            memory_ops: generic.memory_ops,
         })
     }
 }

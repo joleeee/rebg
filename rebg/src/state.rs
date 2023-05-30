@@ -11,7 +11,7 @@ pub use aarch64::{Aarch64Flags, Aarch64State, Aarch64Step};
 pub mod x64;
 pub use x64::{X64Flags, X64State, X64Step};
 
-// This needs to be a trait because different architectures have different instruction sizes
+/// A single step in the trace.
 pub trait Step<const N: usize>: Clone {
     type STATE: State<N>;
     fn code(&self) -> &[u8];
@@ -20,14 +20,49 @@ pub trait Step<const N: usize>: Clone {
     // sometimes they differ, though, so also keep address
     fn address(&self) -> u64;
     fn strace(&self) -> Option<&String>;
+    fn memory_ops(&self) -> &[MemoryOp];
 }
 
+/// Register values and flags
 pub trait State<const N: usize>: Clone {
     type FLAGS: Flags + Clone + Copy + fmt::Debug;
     fn pc(&self) -> u64;
     fn regs(&self) -> &[u64; N];
     fn reg_name(i: usize) -> &'static str;
     fn flags(&self) -> &Self::FLAGS;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MemoryOpKind {
+    #[allow(dead_code)]
+    Read,
+    Write,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MemoryValue {
+    Byte(u8),
+    Word(u16),
+    Dword(u32),
+    Qword(u64),
+}
+
+impl MemoryValue {
+    pub fn as_u64(&self) -> u64 {
+        match &self {
+            MemoryValue::Byte(b) => *b as u64,
+            MemoryValue::Word(w) => *w as u64,
+            MemoryValue::Dword(d) => *d as u64,
+            MemoryValue::Qword(q) => *q as u64,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MemoryOp {
+    pub address: u64,
+    pub kind: MemoryOpKind,
+    pub value: MemoryValue,
 }
 
 // nasty shit
@@ -93,6 +128,7 @@ struct GenericStep<STATE: FromStr> {
     code: Vec<u8>,
     address: u64,
     strace: Option<String>,
+    memory_ops: Vec<MemoryOp>,
 }
 
 impl<STATE> FromStr for GenericStep<STATE>
@@ -110,6 +146,8 @@ where
 
         let mut partial_strace = None;
         let mut strace = None;
+
+        let mut memory_ops = vec![];
 
         for (what, content) in lines {
             match what {
@@ -145,6 +183,29 @@ where
                         partial_strace = Some(content)
                     }
                 }
+                "st" => {
+                    let (bits, rest) = content.split_once("|").unwrap();
+
+                    let bits = i32::from_str_radix(bits, 10).unwrap();
+
+                    let (ptr, val) = rest.split_once("|").unwrap();
+                    let ptr = ptr.strip_prefix("0x").unwrap();
+                    let ptr = u64::from_str_radix(ptr, 16).unwrap();
+
+                    let value = match bits {
+                        8 => MemoryValue::Byte(u8::from_str_radix(val, 16)?),
+                        16 => MemoryValue::Word(u16::from_str_radix(val, 16)?),
+                        32 => MemoryValue::Dword(u32::from_str_radix(val, 16)?),
+                        64 => MemoryValue::Qword(u64::from_str_radix(val, 16)?),
+                        _ => return Err(anyhow::anyhow!("unknown value size: {} bits", bits)),
+                    };
+
+                    memory_ops.push(MemoryOp {
+                        address: ptr,
+                        kind: MemoryOpKind::Write,
+                        value,
+                    });
+                }
                 _ => {
                     // might be the end of an strace
                     if let Some((data, _end)) = content.split_once("|sdone") {
@@ -176,6 +237,7 @@ where
             code,
             address,
             strace,
+            memory_ops,
         })
     }
 }
