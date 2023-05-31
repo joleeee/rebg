@@ -8,7 +8,11 @@ pub struct SymbolReference {
 
 impl Display for SymbolReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}+{:x}", self.symbol.name, self.offset)
+        write!(f, "{}", self.symbol.name)?;
+        if self.symbol.to != self.symbol.from {
+            write!(f, "+{:x}", self.offset)?;
+        }
+        Ok(())
     }
 }
 
