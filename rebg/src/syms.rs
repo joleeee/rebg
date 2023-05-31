@@ -60,6 +60,12 @@ impl SymbolTable {
                 .strtab
                 .get_at(sym.st_name)
                 .expect("back to you, elf is sketchy");
+
+            // https://sourceware.org/binutils/docs/as/AArch64-Mapping-Symbols.html
+            if matches!(name, "$d" | "$x") {
+                continue;
+            }
+
             let base = sym.st_value;
             let size = sym.st_size;
 
