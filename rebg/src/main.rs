@@ -214,6 +214,9 @@ fn spawn_runner(image_name: &str, arch: &Arch) -> String {
         .spawn()
         .unwrap();
     let output = run.wait_with_output().unwrap();
+    if !output.status.success() {
+        panic!("Failed to start the container: {:#?}", output);
+    }
     let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
 
     println!("Spawned new runner with id: {}", id);
