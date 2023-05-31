@@ -4,7 +4,7 @@ annoying.
 
 Logs all ran cpu instructions, register writes, memory writes, and syscalls.
 
-Per now it only works with linux program, both `x86_64` and `aarch64`. Programs
+Per now it only works with linux programs, both `x86_64` and `aarch64`. Programs
 are traced inside docker, so you can trace them from any operating system. This
 also means you can trace different architectures, because docker supports
 emulation through qemu. This also makes a lot of stuff work out of the libc,
