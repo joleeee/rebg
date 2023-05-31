@@ -308,7 +308,7 @@ impl Arch {
 
 fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r#"(.*)#0x([0-9a-fA-F]*)(.*)"#).unwrap();
+        static ref RE: Regex = Regex::new(r#"(.*)0x([0-9a-fA-F]*)(.*)"#).unwrap();
     }
 
     let mn = inst.mnemonic().unwrap();
@@ -329,8 +329,8 @@ fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {
                 .iter()
                 .map(|x| u64::from_str_radix(x, 16).unwrap())
                 .map(|x| match table.lookup(x) {
-                    Some(sym) => format!("#<{}>", sym),
-                    None => format!("#0x{:x}", x),
+                    Some(sym) => format!("<{}>", sym),
+                    None => format!("0x{:x}", x),
                 })
                 .collect();
 
