@@ -107,7 +107,14 @@ where
 
                 return;
             }
-            lines.push(stderr_buf.strip_suffix('\n').unwrap().to_string());
+
+            lines.push(
+                stderr_buf
+                    .strip_suffix('\n')
+                    .and_then(|x| Some(x.to_string()))
+                    // last line may not have a newline
+                    .unwrap_or(stderr_buf),
+            );
         }
     });
 

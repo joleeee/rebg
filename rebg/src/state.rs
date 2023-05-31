@@ -138,8 +138,6 @@ where
     type Error = anyhow::Error;
 
     fn try_from(input: &[String]) -> anyhow::Result<Self> {
-        let lines = input.iter().filter_map(|x| x.split_once('|'));
-
         let mut s_state = None;
         let mut s_address = None;
         let mut s_code = None;
@@ -149,7 +147,12 @@ where
 
         let mut memory_ops = vec![];
 
-        for (what, content) in lines {
+        for line in input {
+            let (what, content) = match line.split_once('|') {
+                Some(x) => x,
+                None => continue,
+            };
+
             match what {
                 "regs" => {
                     s_state = if let Some(prev) = s_state {
@@ -177,7 +180,7 @@ where
                         .strip_prefix("contents=")
                         .expect("missing content= prefix");
 
-                    if let Some((data, _end)) = content.split_once("|sdone") {
+                    if let Some(data) = content.strip_suffix("|sdone") {
                         strace = Some(data.to_string())
                     } else {
                         partial_strace = Some(content)
@@ -208,7 +211,7 @@ where
                 }
                 _ => {
                     // might be the end of an strace
-                    if let Some((data, _end)) = content.split_once("|sdone") {
+                    if let Some(data) = line.strip_suffix("|sdone") {
                         strace = Some(
                             partial_strace
                                 .expect("extending strace without a start")
@@ -217,7 +220,7 @@ where
                         );
                         partial_strace = None;
                     } else {
-                        panic!("unknown data {}|{}", what, content)
+                        panic!("unknown data '{}'", line)
                     }
                 }
             }
@@ -227,10 +230,7 @@ where
         let code = s_code.unwrap();
         let state = s_state.unwrap();
 
-        // otherwise incomplete
-        if strace.is_some() {
-            assert!(partial_strace.is_none());
-        }
+        assert!(partial_strace.is_none());
 
         Ok(Self {
             state,
