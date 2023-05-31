@@ -101,7 +101,7 @@ impl SymbolTable {
     pub fn lookup(&self, adr: u64) -> Option<SymbolReference> {
         self.symbols
             .iter()
-            .find(|s| s.from <= adr && adr < s.to)
+            .find(|s| s.from <= adr && adr <= s.to)
             .cloned()
             .map(|s| SymbolReference {
                 offset: adr - s.from,
