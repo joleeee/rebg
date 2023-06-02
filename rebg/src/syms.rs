@@ -20,7 +20,7 @@ impl<'a> Display for SymbolReference<'a> {
 pub struct Symbol {
     pub name: String,
     pub from: u64,
-    to: u64,
+    pub to: u64,
 }
 
 #[derive(Debug)]
