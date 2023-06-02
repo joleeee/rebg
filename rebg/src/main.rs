@@ -12,13 +12,12 @@ use std::{
     process::{Child, Command, Stdio},
     thread,
 };
-use syms::SymbolTable;
+use rebg::syms::SymbolTable;
 
 use crate::state::{MemoryOp, MemoryOpKind};
 
 mod rstate;
 mod state;
-mod syms;
 
 #[derive(Debug)]
 enum QemuHeader<STEP, const N: usize>
