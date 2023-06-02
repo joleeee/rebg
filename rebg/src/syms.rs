@@ -50,7 +50,7 @@ impl SymbolTable {
             .map(|ph| ProgramOffset {
                 offset: ph.p_offset,
                 addr: ph.p_vaddr,
-                size: ph.p_filesz, // memsz is bigger because it contains bss (uninitd data)
+                size: ph.p_filesz, // memsz is possibly bigger because it contains bss (zeroed variables / data)
             })
             .collect::<Vec<_>>();
 
