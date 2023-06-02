@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SymbolReference {
     pub symbol: Symbol,
     pub offset: u64, // how much after the start of the symbol
@@ -16,7 +16,7 @@ impl Display for SymbolReference {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Symbol {
     pub name: String,
     pub from: u64,
@@ -123,5 +123,66 @@ impl SymbolTable {
         let mut symbols = self.symbols;
         symbols.append(&mut other.symbols);
         Self { symbols }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Symbol, SymbolReference, SymbolTable};
+
+    #[test]
+    fn pie() {
+        // setup
+        let sym1 = Symbol {
+            name: "main".to_string(),
+            from: 0x0,
+            to: 0x200,
+        };
+
+        let sym2 = Symbol {
+            name: "somevar".to_string(),
+            from: 0x800,
+            to: 0x800,
+        };
+
+        let table = SymbolTable {
+            symbols: vec![sym1.clone(), sym2.clone()],
+        };
+
+        // do the pie offset
+        let pie_table = table.pie(0x40_000);
+
+        // this was inside main, but now main is offset by 0x40_000
+        assert_eq!(pie_table.lookup(0x100), None);
+
+        // main should now be here
+        let sym1_pie = Symbol {
+            name: sym1.name,
+            from: sym1.from + 0x40_000,
+            to: sym1.to + 0x40_000,
+        };
+
+        // test boundries
+        assert_eq!(pie_table.lookup(0x39_fff), None);
+        assert_eq!(
+            pie_table.lookup(0x40_000),
+            Some(SymbolReference {
+                symbol: sym1_pie.clone(),
+                offset: 0x000
+            })
+        );
+        assert_eq!(
+            pie_table.lookup(0x40_200),
+            Some(SymbolReference {
+                symbol: sym1_pie,
+                offset: 0x200
+            })
+        );
+        assert_eq!(pie_table.lookup(0x40_201), None);
+
+        // the variable
+        assert!(pie_table.lookup(0x40_7ff).is_none());
+        assert!(pie_table.lookup(0x40_800).is_some());
+        assert!(pie_table.lookup(0x40_801).is_none());
     }
 }
