@@ -1,12 +1,12 @@
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymbolReference {
-    pub symbol: Symbol,
+pub struct SymbolReference<'a> {
+    pub symbol: &'a Symbol,
     pub offset: u64, // how much after the start of the symbol
 }
 
-impl Display for SymbolReference {
+impl<'a> Display for SymbolReference<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.symbol.name)?;
         if self.symbol.to != self.symbol.from {
@@ -108,14 +108,13 @@ impl SymbolTable {
         Self { symbols }
     }
 
-    pub fn lookup(&self, adr: u64) -> Option<SymbolReference> {
+    pub fn lookup<'a>(&'a self, adr: u64) -> Option<SymbolReference<'a>> {
         self.symbols
             .iter()
             .find(|s| s.from <= adr && adr <= s.to)
-            .cloned()
             .map(|s| SymbolReference {
                 offset: adr - s.from,
-                symbol: s,
+                symbol: &s,
             })
     }
 
@@ -167,14 +166,14 @@ mod tests {
         assert_eq!(
             pie_table.lookup(0x40_000),
             Some(SymbolReference {
-                symbol: sym1_pie.clone(),
+                symbol: &sym1_pie,
                 offset: 0x000
             })
         );
         assert_eq!(
             pie_table.lookup(0x40_200),
             Some(SymbolReference {
-                symbol: sym1_pie,
+                symbol: &sym1_pie,
                 offset: 0x200
             })
         );
