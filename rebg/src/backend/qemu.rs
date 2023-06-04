@@ -34,7 +34,6 @@ where
             String::from("-d"),
             String::from("in_asm,strace"),
             guest_path,
-            //executable.to_str().unwrap().to_string(),
         ];
 
         (qemu, options)
