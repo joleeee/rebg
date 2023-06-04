@@ -1,17 +1,13 @@
-use capstone::Capstone;
-use lazy_static::lazy_static;
+use rebg::analyzer::dump::TraceDumper;
+use rebg::analyzer::Analyzer;
 use rebg::launcher::docker::DockerArgs;
-use rebg::state::{Aarch64Step, MemoryOp, MemoryOpKind, State, Step, X64Step};
+use rebg::state::{Aarch64Step, X64Step};
 use rebg::{
     arch::Arch,
-    backend::{qemu::QEMU, Backend, ParsedStep},
+    backend::{qemu::QEMU, Backend},
     launcher::Launcher,
-    syms::SymbolTable,
 };
-use regex::Regex;
-use std::{fmt, fs, path::PathBuf};
-
-mod rstate;
+use std::{fs, path::PathBuf};
 
 #[derive(argh::FromArgs)]
 /// tracer
@@ -32,114 +28,6 @@ struct Arguments {
 #[argh(subcommand)]
 enum Backends {
     Docker(DockerArgs),
-}
-
-fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r#"(.*)0x([0-9a-fA-F]*)(.*)"#).unwrap();
-    }
-
-    let mn = inst.mnemonic().unwrap();
-    let op = inst.op_str().unwrap();
-
-    let op = match RE.captures(op).zip(table) {
-        Some((caps, table)) => {
-            let mut caps = caps.iter();
-
-            let _whole = caps.next().unwrap().unwrap().as_str();
-
-            let parts: Vec<_> = caps.map(|x| x.unwrap()).map(|x| x.as_str()).collect();
-
-            let (first, rest) = parts.split_first().unwrap();
-            let (last, middle) = rest.split_last().unwrap();
-
-            let mut middle: Vec<_> = middle
-                .iter()
-                .map(|x| u64::from_str_radix(x, 16).unwrap())
-                .map(|x| match table.lookup(x) {
-                    Some(sym) => format!("<{}>", sym),
-                    None => format!("0x{:x}", x),
-                })
-                .collect();
-
-            let mut strs = vec![];
-            strs.push(first.to_string());
-            strs.append(&mut middle);
-            strs.push(last.to_string());
-
-            strs.join("")
-        }
-        None => op.to_string(),
-    };
-
-    format!("{} {}", mn, op)
-}
-
-fn print_trace<STEP, const N: usize>(trace: &[STEP], cs: &Capstone, syms: Option<&SymbolTable>)
-where
-    <STEP as Step<N>>::STATE: State<N>,
-    STEP: Step<N>,
-{
-    let mut previous_state: Option<STEP::STATE> = None;
-
-    for step in trace {
-        if let Some(previous) = previous_state {
-            let current = step.state();
-
-            let diff = rstate::diff(&previous, current);
-            diff.print::<STEP::STATE>();
-            println!();
-        }
-
-        let address = step.address();
-        let code = step.code();
-
-        let disasm = cs.disasm_all(code, address).unwrap();
-        assert_eq!(disasm.len(), 1);
-        let op = inst_to_str(disasm.first().unwrap(), syms);
-
-        let symbol = syms.and_then(|s| s.lookup(address));
-
-        let location = if let Some(ref symbol) = symbol {
-            let symbol = format!("<{}>", symbol);
-            format!("{:>18}", symbol)
-        } else {
-            format!("0x{:016x}", address)
-        };
-
-        println!("{}: {}", location, op);
-        // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
-        // EDIT: it seems like it happens when branching to somewhere doing a syscall. it results in two regs| messages, and the last one is the one that "counts"..., i guess where it jump to after the syscall is done or something...?
-        assert_eq!(address, step.state().pc());
-
-        if let Some(strace) = step.strace() {
-            println!("syscall: {}", strace);
-        }
-
-        // only print memory changes if we're in the user binary
-        for MemoryOp {
-            address,
-            kind,
-            value,
-        } in step.memory_ops()
-        {
-            let arrow = match kind {
-                MemoryOpKind::Read => "->",
-                MemoryOpKind::Write => "<-",
-            };
-
-            println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
-        }
-
-        previous_state = Some(step.state().clone());
-    }
-
-    let bytes = std::mem::size_of_val(&trace[0]) * trace.len();
-    eprintln!(
-        "Used {}kB of memory for {} steps",
-        bytes / 1024,
-        trace.len()
-    );
 }
 
 fn main() {
@@ -166,83 +54,14 @@ fn main() {
 
             let child = docker.launch(cmd.0, cmd.1).unwrap();
             let rx = qemu.parse(child);
-            do_the_stuff::<Aarch64Step, _, 32>(&docker, rx, &arch);
+            TraceDumper::analyze::<Aarch64Step, _, 32>(&docker, rx, &arch);
         }
         Arch::X86_64 => {
             let cmd = Backend::<X64Step, 16>::command(&qemu, &program, arch);
 
             let child = docker.launch(cmd.0, cmd.1).unwrap();
             let rx = qemu.parse(child);
-            do_the_stuff::<X64Step, _, 16>(&docker, rx, &arch);
+            TraceDumper::analyze::<X64Step, _, 16>(&docker, rx, &arch);
         }
-    }
-}
-
-fn do_the_stuff<STEP, LAUNCHER, const N: usize>(
-    launcher: &LAUNCHER,
-    rx: flume::Receiver<ParsedStep<STEP, N>>,
-    arch: &Arch,
-) where
-    STEP: Step<N> + fmt::Debug,
-    LAUNCHER: Launcher,
-    <LAUNCHER as Launcher>::Error: fmt::Debug,
-{
-    let cs = arch.make_capstone().unwrap();
-
-    let offsets = match rx.recv().unwrap() {
-        ParsedStep::LibLoad(x) => x,
-        _ => panic!("Expected elfmsg"),
-    };
-
-    // get symbol table from all binaries
-    let mut symbol_tables = Vec::new();
-    for path in offsets.keys() {
-        let contents = launcher.read_file(&PathBuf::from(path)).unwrap();
-        let elf = goblin::elf::Elf::parse(&contents).unwrap();
-
-        let pie = offsets.get(path).unwrap();
-        let table = SymbolTable::from_elf(elf).pie(pie.0);
-
-        symbol_tables.push(table);
-    }
-    // merge into a single table
-    let table = symbol_tables
-        .into_iter()
-        .reduce(|accum, item| accum.merge(item))
-        .unwrap();
-
-    let mut trace = Vec::new();
-    let result = loop {
-        let v = match rx.recv() {
-            Ok(v) => v,
-            Err(flume::RecvError::Disconnected) => panic!("premature disconnect"),
-        };
-
-        match v {
-            ParsedStep::LibLoad(_) => panic!("Unexpected libload"),
-            ParsedStep::TraceStep(step) => {
-                trace.push(step);
-            }
-            ParsedStep::Final(f) => {
-                // make sure it's done
-                match rx.recv() {
-                    Err(flume::RecvError::Disconnected) => (),
-                    Ok(_) => panic!("Got message after final"),
-                }
-                break f;
-            }
-        }
-    };
-
-    print_trace(&trace, &cs, Some(&table));
-
-    if !result.status.success() {
-        println!("Failed with code: {}", result.status);
-    }
-    if !result.stdout.is_empty() {
-        println!("stdout:\n{}", String::from_utf8(result.stdout).unwrap());
-    }
-    if !result.stderr.is_empty() {
-        println!("stderr:\n{}", String::from_utf8(result.stderr).unwrap());
     }
 }
