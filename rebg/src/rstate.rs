@@ -1,8 +1,7 @@
 //! Register state
 
 use bitflags::Flags;
-
-use crate::state::State;
+use rebg::state::State;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(dead_code)]

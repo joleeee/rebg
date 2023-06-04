@@ -123,7 +123,7 @@ where
     }
 }
 
-struct GenericStep<STATE: FromStr> {
+pub struct GenericStep<STATE: FromStr> {
     state: STATE,
     code: Vec<u8>,
     address: u64,
