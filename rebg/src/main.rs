@@ -41,6 +41,7 @@ fn main() {
     let elf = goblin::elf::Elf::parse(&buffer).unwrap();
     let arch = arch.unwrap_or_else(|| Arch::from_elf(elf.header.e_machine).unwrap());
 
+    #[allow(clippy::infallible_destructuring_match)]
     let docker = match backend {
         Backends::Docker(docker) => docker,
     };

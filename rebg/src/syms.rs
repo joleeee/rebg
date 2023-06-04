@@ -108,13 +108,13 @@ impl SymbolTable {
         Self { symbols }
     }
 
-    pub fn lookup<'a>(&'a self, adr: u64) -> Option<SymbolReference<'a>> {
+    pub fn lookup(&self, adr: u64) -> Option<SymbolReference> {
         self.symbols
             .iter()
             .find(|s| s.from <= adr && adr <= s.to)
             .map(|s| SymbolReference {
                 offset: adr - s.from,
-                symbol: &s,
+                symbol: s,
             })
     }
 

@@ -187,11 +187,11 @@ where
                     }
                 }
                 "st" => {
-                    let (bits, rest) = content.split_once("|").unwrap();
+                    let (bits, rest) = content.split_once('|').unwrap();
 
                     let bits = i32::from_str_radix(bits, 10).unwrap();
 
-                    let (ptr, val) = rest.split_once("|").unwrap();
+                    let (ptr, val) = rest.split_once('|').unwrap();
                     let ptr = ptr.strip_prefix("0x").unwrap();
                     let ptr = u64::from_str_radix(ptr, 16).unwrap();
 
