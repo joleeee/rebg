@@ -3,8 +3,34 @@
 #include <string>
 #include <utility>
 #include <stdint.h>
+#include <assert.h>
+
+using UTIL::REGVALUE;
+using std::vector;
 
 FILE* out;
+
+inline VOID printReg(CONTEXT *context, REG reg) {
+    std::string name = REG_StringShort(reg);
+
+    UINT32 regsize = REG_Size(reg);
+    uint8_t buf[8];
+    assert(regsize == 8);
+
+    PIN_GetContextRegval(context, reg, (uint8_t*)buf);
+    fprintf(out, "|%s=%lx", name.c_str(), *(uint64_t*)buf);
+}
+
+VOID dumpRegs(CONTEXT *context) {
+    fprintf(out, "regs");
+
+    printReg(context, REG_RIP);
+    for(REG reg = REG_RDI; reg <= REG_R15; reg++) {
+        printReg(context, reg);
+    }
+
+    fprintf(out, "\n");
+}
 
 VOID instrumentInstruction(INS ins, VOID *v) {
     ADDRINT address = INS_Address(ins);
@@ -17,6 +43,9 @@ VOID instrumentInstruction(INS ins, VOID *v) {
         fprintf(out, "%02x", *a);
     }
     fprintf(out, "\n");
+
+    // quite expensive
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)dumpRegs, IARG_CONTEXT, IARG_END);
 }
 
 VOID fini(INT32 code, VOID *v) {
