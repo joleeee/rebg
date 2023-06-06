@@ -1,0 +1,40 @@
+#!/bin/sh
+ROOT="/opt/pin"
+
+# .o
+g++-12 \
+	-Wall -Werror -Wno-unknown-pragmas \
+	-DPIN_CRT=1 \
+	-fno-stack-protector -fno-exceptions -funwind-tables -fasynchronous-unwind-tables -fno-rtti \
+	-DTARGET_IA32E -DHOST_IA32E -fPIC -DTARGET_LINUX \
+	-fabi-version=2 -faligned-new \
+	-I"${ROOT}"/source/include/pin \
+	-I"${ROOT}"/source/include/pin/gen \
+	-isystem \
+	"${ROOT}"/extras/cxx/include -isystem \
+	"${ROOT}"/extras/crt/include -isystem \
+	"${ROOT}"/extras/crt/include/arch-x86_64 -isystem \
+	"${ROOT}"/extras/crt/include/kernel/uapi -isystem \
+	"${ROOT}"/extras/crt/include/kernel/uapi/asm-x86 \
+	-I"${ROOT}"/extras/components/include \
+	-I"${ROOT}"/extras/xed-intel64/include/xed \
+	-I"${ROOT}"/source/tools/Utils \
+	-I"${ROOT}"/source/tools/InstLib \
+	-O3 \
+	-fomit-frame-pointer -fno-strict-aliasing \
+	-Wno-dangling-pointer \
+	-c -o tracer.o tracer.cpp
+
+# .so
+g++-12 \
+	-shared -Wl,--hash-style=sysv \
+	"${ROOT}"/intel64/runtime/pincrt/crtbeginS.o \
+	-Wl,-Bsymbolic -Wl,--version-script="${ROOT}"/source/include/pin/pintool.ver -fabi-version=2 \
+	-o tracer.so tracer.o \
+	-L"${ROOT}"/intel64/runtime/pincrt \
+	-L"${ROOT}"/intel64/lib \
+	-L"${ROOT}"/intel64/lib-ext \
+	-L"${ROOT}"/extras/xed-intel64/lib \
+	-lpin -lxed \
+	"${ROOT}"/intel64/runtime/pincrt/crtendS.o \
+	-lpindwarf -ldl-dynamic -nostdlib -lc++ -lc++abi -lm-dynamic -lc-dynamic -lunwind-dynamic

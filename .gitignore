@@ -2,4 +2,7 @@
 /rebg/container
 /bins/
 
+*.so
+*.o
+
 .DS_STORE
