@@ -6,7 +6,7 @@
 #include <assert.h>
 
 using UTIL::REGVALUE;
-using std::vector;
+using std::string;
 
 FILE* out;
 
@@ -48,6 +48,13 @@ VOID instrumentInstruction(INS ins, VOID *v) {
     INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)dumpRegs, IARG_CONTEXT, IARG_END);
 }
 
+VOID instrumentImage(IMG img, VOID *v) {
+	ADDRINT low = IMG_LowAddress(img);
+	ADDRINT high = IMG_HighAddress(img);
+	string name = IMG_Name(img);
+	fprintf(out, "imgload|%s|%lx|%lx\n", name.c_str(), low, high);
+}
+
 VOID fini(INT32 code, VOID *v) {
     fclose(out);
 }
@@ -58,6 +65,7 @@ int main(int argc, char *argv[]) {
     }
     out = fopen("/tmp/rebg-pin", "w");
     INS_AddInstrumentFunction(instrumentInstruction, 0);
+    IMG_AddInstrumentFunction(instrumentImage, 0);
     PIN_AddFiniFunction(fini, 0);
     PIN_StartProgram();
     return 0;
