@@ -1,5 +1,5 @@
 use crate::{arch::Arch, state::Step};
-use std::{collections::HashMap, path::Path, process::Child};
+use std::{collections::HashMap, marker::PhantomData, path::Path, process::Child};
 
 pub mod qemu;
 
@@ -20,6 +20,16 @@ where
     STEP: Step<N>,
 {
     type ITER: Iterator<Item = ParsedStep<STEP, N>>;
-    fn command(&self, executable: &Path, arch: Arch) -> (String, Vec<String>);
+    fn command(&self, executable: &Path, arch: Arch) -> BackendCmd<STEP, N>;
     fn parse(&self, proc: Child) -> Self::ITER;
+}
+
+pub struct BackendCmd<STEP, const N: usize>
+where
+    STEP: Step<N>,
+{
+    pub program: String,
+    pub args: Vec<String>,
+    // for trait inferance
+    _step: PhantomData<STEP>,
 }

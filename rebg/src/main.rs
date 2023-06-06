@@ -1,5 +1,7 @@
 use rebg::analyzer::dump::TraceDumper;
 use rebg::analyzer::Analyzer;
+use rebg::backend::qemu::QEMUParser;
+use rebg::backend::BackendCmd;
 use rebg::launcher::docker::DockerArgs;
 use rebg::state::{Aarch64Step, X64Step};
 use rebg::{
@@ -51,18 +53,20 @@ fn main() {
 
     match arch {
         Arch::ARM64 => {
-            let cmd = Backend::<Aarch64Step, 32>::command(&qemu, &program, arch);
+            let cmd: BackendCmd<Aarch64Step, 32> = qemu.command(&program, arch);
 
-            let child = docker.launch(cmd.0, cmd.1).unwrap();
-            let rx = qemu.parse(child);
-            TraceDumper::analyze::<Aarch64Step, _, QEMU, _, 32>(&docker, rx, &arch);
+            let child = docker.launch(cmd.program, cmd.args).unwrap();
+            let rx: QEMUParser<Aarch64Step, 32> = qemu.parse(child);
+
+            TraceDumper::analyze::<_, _, QEMU, _, 32>(&docker, rx, &arch);
         }
         Arch::X86_64 => {
-            let cmd = Backend::<X64Step, 16>::command(&qemu, &program, arch);
+            let cmd: BackendCmd<X64Step, 16> = qemu.command(&program, arch);
 
-            let child = docker.launch(cmd.0, cmd.1).unwrap();
-            let rx = qemu.parse(child);
-            TraceDumper::analyze::<X64Step, _, QEMU, _, 16>(&docker, rx, &arch);
+            let child = docker.launch(cmd.program, cmd.args).unwrap();
+            let rx: QEMUParser<X64Step, 16> = qemu.parse(child);
+
+            TraceDumper::analyze::<_, _, QEMU, _, 16>(&docker, rx, &arch);
         }
     }
 }

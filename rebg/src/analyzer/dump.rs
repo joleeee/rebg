@@ -24,6 +24,7 @@ impl Analyzer for TraceDumper {
         arch: &Arch,
     ) where
         STEP: Step<N> + std::fmt::Debug,
+        // for inferance
         LAUNCHER: Launcher,
         <LAUNCHER as Launcher>::Error: std::fmt::Debug,
         BACKEND: crate::backend::Backend<STEP, N, ITER = ITER>,

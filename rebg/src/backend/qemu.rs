@@ -1,6 +1,6 @@
 use anyhow::Context;
 
-use super::{Backend, ParsedStep};
+use super::{Backend, BackendCmd, ParsedStep};
 use crate::{arch::Arch, state::Step};
 use std::{
     collections::HashMap,
@@ -21,7 +21,7 @@ where
 {
     type ITER = QEMUParser<STEP, N>;
 
-    fn command(&self, executable: &Path, arch: Arch) -> (String, Vec<String>) {
+    fn command(&self, executable: &Path, arch: Arch) -> BackendCmd<STEP, N> {
         let qemu = arch.qemu_user_bin().to_string();
 
         let guest_path = format!(
@@ -40,7 +40,11 @@ where
             guest_path,
         ];
 
-        (qemu, options)
+        BackendCmd {
+            program: qemu,
+            args: options,
+            _step: PhantomData,
+        }
     }
 
     /// Takes output from the process and parses it to steps
