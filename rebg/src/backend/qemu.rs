@@ -49,8 +49,6 @@ where
     }
 }
 
-impl QEMU {}
-
 // having the bounds here mean the STATE has to be the same type as the STATE type in QEMU, which
 // means less room for error and automatic inference of this type
 
