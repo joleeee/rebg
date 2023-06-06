@@ -8,7 +8,6 @@ use crate::{
     syms::SymbolTable,
 };
 use capstone::Capstone;
-use core::fmt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::PathBuf;
@@ -17,18 +16,22 @@ use std::path::PathBuf;
 pub struct TraceDumper {}
 
 impl Analyzer for TraceDumper {
-    fn analyze<STEP, LAUNCHER, const N: usize>(
+    fn analyze<STEP, LAUNCHER, BACKEND, ITER, const N: usize>(
+        // to read files
         launcher: &LAUNCHER,
-        rx: flume::Receiver<ParsedStep<STEP, N>>,
+        // inferred from BACKEND
+        mut iter: ITER,
         arch: &Arch,
     ) where
-        STEP: Step<N> + fmt::Debug,
+        STEP: Step<N> + std::fmt::Debug,
         LAUNCHER: Launcher,
-        <LAUNCHER as Launcher>::Error: fmt::Debug,
+        <LAUNCHER as Launcher>::Error: std::fmt::Debug,
+        BACKEND: crate::backend::Backend<STEP, N, ITER = ITER>,
+        ITER: Iterator<Item = ParsedStep<STEP, N>>,
     {
         let cs = arch.make_capstone().unwrap();
 
-        let offsets = match rx.recv().unwrap() {
+        let offsets = match iter.next().unwrap() {
             ParsedStep::LibLoad(x) => x,
             _ => panic!("Expected elfmsg"),
         };
@@ -52,9 +55,9 @@ impl Analyzer for TraceDumper {
 
         let mut trace = Vec::new();
         let result = loop {
-            let v = match rx.recv() {
-                Ok(v) => v,
-                Err(flume::RecvError::Disconnected) => panic!("premature disconnect"),
+            let v = match iter.next() {
+                Some(v) => v,
+                None => panic!("prematurely closed"),
             };
 
             match v {
@@ -64,9 +67,9 @@ impl Analyzer for TraceDumper {
                 }
                 ParsedStep::Final(f) => {
                     // make sure it's done
-                    match rx.recv() {
-                        Err(flume::RecvError::Disconnected) => (),
-                        Ok(_) => panic!("Got message after final"),
+                    match iter.next() {
+                        None => (),
+                        Some(_) => panic!("Got message after final"),
                     }
                     break f;
                 }

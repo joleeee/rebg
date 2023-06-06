@@ -55,14 +55,14 @@ fn main() {
 
             let child = docker.launch(cmd.0, cmd.1).unwrap();
             let rx = qemu.parse(child);
-            TraceDumper::analyze::<Aarch64Step, _, 32>(&docker, rx, &arch);
+            TraceDumper::analyze::<Aarch64Step, _, QEMU, _, 32>(&docker, rx, &arch);
         }
         Arch::X86_64 => {
             let cmd = Backend::<X64Step, 16>::command(&qemu, &program, arch);
 
             let child = docker.launch(cmd.0, cmd.1).unwrap();
             let rx = qemu.parse(child);
-            TraceDumper::analyze::<X64Step, _, 16>(&docker, rx, &arch);
+            TraceDumper::analyze::<X64Step, _, QEMU, _, 16>(&docker, rx, &arch);
         }
     }
 }
