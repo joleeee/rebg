@@ -1,4 +1,5 @@
 pub mod docker;
+pub mod native;
 
 use std::{path::Path, process::Child};
 

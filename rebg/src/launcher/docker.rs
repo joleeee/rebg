@@ -167,9 +167,19 @@ impl Launcher for Docker {
         Ok(bytes)
     }
 
-    fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error> {
+    fn launch(&self, program: String, mut args: Vec<String>) -> Result<Child, Self::Error> {
         // run qemu inside the container
         println!("Starting qemu");
+
+        let actual_program = args.last_mut().unwrap();
+        *actual_program = format!(
+            "/container/{}",
+            PathBuf::from(&actual_program)
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+        );
 
         let child = Command::new("docker")
             .arg("exec")

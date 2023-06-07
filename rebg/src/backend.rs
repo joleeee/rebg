@@ -3,6 +3,7 @@ use std::{collections::HashMap, marker::PhantomData, path::Path, process::Child}
 
 pub mod qemu;
 
+#[derive(Debug)]
 pub enum ParsedStep<STEP, const N: usize>
 where
     STEP: Step<N>,

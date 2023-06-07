@@ -24,20 +24,11 @@ where
     fn command(&self, executable: &Path, arch: Arch) -> BackendCmd<STEP, N> {
         let qemu = arch.qemu_user_bin().to_string();
 
-        let guest_path = format!(
-            "/container/{}",
-            PathBuf::from(&executable)
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-        );
-
         let options = vec![
             String::from("-one-insn-per-tb"),
             String::from("-d"),
             String::from("in_asm,strace"),
-            guest_path,
+            executable.to_str().unwrap().to_string(),
         ];
 
         BackendCmd {
@@ -56,6 +47,7 @@ where
 // having the bounds here mean the STATE has to be the same type as the STATE type in QEMU, which
 // means less room for error and automatic inference of this type
 
+#[derive(Debug)]
 pub struct QEMUParser<STEP, const N: usize> {
     /// None when done
     proc: Option<Child>,
@@ -111,6 +103,9 @@ where
 
                 // make sure it closed gracefully
                 let result = my_proc.wait_with_output().unwrap();
+                if !result.status.success() {
+                    dbg!(&result);
+                }
 
                 break Some(ParsedStep::Final(result));
             }
