@@ -8,7 +8,7 @@ use std::{
     io::{BufRead, BufReader},
     marker::PhantomData,
     mem,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, ChildStderr},
 };
 
