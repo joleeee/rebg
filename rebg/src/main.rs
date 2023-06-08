@@ -88,20 +88,23 @@ fn main() {
 
     match arch {
         Arch::ARM64 => {
-            launch::<_, _, Aarch64Step, 32>(launcher, qemu, arch, &program);
+            let parser = launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, arch, &program);
+            TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, &arch);
         }
         Arch::X86_64 => {
-            launch::<_, _, X64Step, 16>(launcher, qemu, arch, &program);
+            let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, arch, &program);
+            TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, &arch);
         }
     }
 }
 
-fn launch<LAUNCHER, BACKEND, STEP, const N: usize>(
-    launcher: LAUNCHER,
+fn launch_qemu<LAUNCHER, BACKEND, STEP, const N: usize>(
+    launcher: &LAUNCHER,
     backend: BACKEND,
     arch: Arch,
     program: &PathBuf,
-) where
+) -> QEMUParser<STEP, N>
+where
     LAUNCHER: Launcher<Error = anyhow::Error>,
     BACKEND: Backend<STEP, N, ITER = QEMUParser<STEP, N>>,
     STEP: Step<N> + Send + 'static + fmt::Debug,
@@ -110,7 +113,6 @@ fn launch<LAUNCHER, BACKEND, STEP, const N: usize>(
     let cmd: BackendCmd<STEP, N> = backend.command(program, arch);
 
     let child = launcher.launch(cmd.program, cmd.args).unwrap();
-    let rx: QEMUParser<STEP, N> = backend.parse(child);
 
-    TraceDumper::analyze::<_, _, BACKEND, _, N>(&launcher, rx, &arch);
+    backend.parse(child)
 }
