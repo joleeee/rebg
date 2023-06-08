@@ -104,9 +104,6 @@ where
 
                 // make sure it closed gracefully
                 let result = my_proc.wait_with_output().unwrap();
-                if !result.status.success() {
-                    dbg!(&result);
-                }
 
                 break Some(ParsedStep::Final(result));
             }
