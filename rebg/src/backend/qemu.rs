@@ -25,6 +25,8 @@ where
         let qemu = arch.qemu_user_bin().to_string();
 
         let options = vec![
+            String::from("-rebglog"),
+            String::from("/dev/stderr"),
             String::from("-one-insn-per-tb"),
             String::from("-d"),
             String::from("in_asm,strace"),
