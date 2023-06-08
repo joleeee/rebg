@@ -22,8 +22,8 @@ struct Arguments {
     program: PathBuf,
 
     #[argh(option, short = 'a')]
-    /// override architecure: arm, x64, ...
-    arch: Option<Arch>,
+    /// override detected architecture (arm64, amd64, ...)
+    target_arch: Option<Arch>,
 
     #[argh(subcommand)]
     launcher: LauncherArgs,
@@ -75,26 +75,27 @@ impl Launcher for Launchers {
 fn main() {
     let Arguments {
         program,
-        arch,
+        target_arch,
         launcher,
     } = argh::from_env();
 
     let buffer = fs::read(&program).unwrap();
     let elf = goblin::elf::Elf::parse(&buffer).unwrap();
-    let arch = arch.unwrap_or_else(|| Arch::from_elf(elf.header.e_machine).unwrap());
+    let target_arch = target_arch.unwrap_or_else(|| Arch::from_elf(elf.header.e_machine).unwrap());
 
     let qemu = QEMU {};
 
-    let launcher = launcher.start_backend(program.clone(), arch);
+    let launcher = launcher.start_backend(program.clone(), target_arch);
 
-    match arch {
+    match target_arch {
         Arch::ARM64 => {
-            let parser = launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, arch, &program);
-            TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, &arch);
+            let parser =
+                launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, target_arch, &program);
+            TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, &target_arch);
         }
         Arch::X86_64 => {
-            let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, arch, &program);
-            TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, &arch);
+            let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, target_arch, &program);
+            TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, &target_arch);
         }
     }
 }
