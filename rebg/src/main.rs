@@ -11,6 +11,7 @@ use rebg::{
     launcher::Launcher,
 };
 use std::fmt;
+use std::path::Path;
 use std::{fs, path::PathBuf};
 
 #[derive(argh::FromArgs)]
@@ -102,7 +103,7 @@ fn launch_qemu<LAUNCHER, BACKEND, STEP, const N: usize>(
     launcher: &LAUNCHER,
     backend: BACKEND,
     arch: Arch,
-    program: &PathBuf,
+    program: &Path,
 ) -> QEMUParser<STEP, N>
 where
     LAUNCHER: Launcher<Error = anyhow::Error>,

@@ -64,6 +64,7 @@ where
     type Item = ParsedStep<STEP, N>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        #[allow(clippy::question_mark)]
         if self.proc.is_none() {
             return None;
         }
