@@ -6,9 +6,9 @@ use std::{
 
 use super::Launcher;
 
-/// run directly
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "native")]
+/// run directly
 pub struct NativeArgs {}
 
 impl NativeArgs {

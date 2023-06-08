@@ -8,9 +8,9 @@ use crate::arch::Arch;
 
 use super::Launcher;
 
-/// run inside docker
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "docker")]
+/// run inside docker
 pub struct DockerArgs {
     #[argh(option, short = 'i')]
     /// optional image, ignored if `container` is set
