@@ -25,21 +25,57 @@ struct Arguments {
     arch: Option<Arch>,
 
     #[argh(subcommand)]
-    backend: Backends,
+    launcher: LauncherArgs,
 }
 
 #[derive(argh::FromArgs)]
 #[argh(subcommand)]
-enum Backends {
+enum LauncherArgs {
     Docker(DockerArgs),
     Native(NativeArgs),
+}
+
+impl LauncherArgs {
+    fn start_backend(self, program: PathBuf, arch: Arch) -> Launchers {
+        match self {
+            LauncherArgs::Docker(x) => Launchers::Docker(x.start(program, arch)),
+            LauncherArgs::Native(x) => Launchers::Native(x.start(program, arch)),
+        }
+    }
+}
+
+enum Launchers {
+    Docker(Docker),
+    Native(Native),
+}
+
+impl Launcher for Launchers {
+    type Error = anyhow::Error;
+
+    fn launch(
+        &self,
+        program: String,
+        args: Vec<String>,
+    ) -> Result<std::process::Child, Self::Error> {
+        match self {
+            Launchers::Docker(d) => d.launch(program, args),
+            Launchers::Native(n) => n.launch(program, args),
+        }
+    }
+
+    fn read_file(&self, path: &std::path::Path) -> Result<Vec<u8>, Self::Error> {
+        match self {
+            Launchers::Docker(x) => x.read_file(path),
+            Launchers::Native(x) => x.read_file(path),
+        }
+    }
 }
 
 fn main() {
     let Arguments {
         program,
         arch,
-        backend,
+        launcher,
     } = argh::from_env();
 
     let buffer = fs::read(&program).unwrap();
@@ -48,66 +84,33 @@ fn main() {
 
     let qemu = QEMU {};
 
-    match backend {
-        Backends::Docker(docker) => {
-            let docker = docker.start(program.clone(), arch);
+    let launcher = launcher.start_backend(program.clone(), arch);
 
-            match arch {
-                Arch::ARM64 => {
-                    launch_docker::<_, Aarch64Step, 32>(docker, qemu, arch, &program);
-                }
-                Arch::X86_64 => {
-                    launch_docker::<_, X64Step, 16>(docker, qemu, arch, &program);
-                }
-            }
+    match arch {
+        Arch::ARM64 => {
+            launch::<_, _, Aarch64Step, 32>(launcher, qemu, arch, &program);
         }
-        Backends::Native(native) => {
-            let native = native.start(program.clone(), arch);
-
-            match arch {
-                Arch::ARM64 => {
-                    launch_native::<_, Aarch64Step, 32>(native, qemu, arch, &program);
-                }
-                Arch::X86_64 => {
-                    launch_native::<_, X64Step, 16>(native, qemu, arch, &program);
-                }
-            }
+        Arch::X86_64 => {
+            launch::<_, _, X64Step, 16>(launcher, qemu, arch, &program);
         }
     }
 }
 
-fn launch_docker<BACKEND, STEP, const N: usize>(
-    docker: Docker,
+fn launch<LAUNCHER, BACKEND, STEP, const N: usize>(
+    launcher: LAUNCHER,
     backend: BACKEND,
     arch: Arch,
     program: &PathBuf,
 ) where
+    LAUNCHER: Launcher<Error = anyhow::Error>,
     BACKEND: Backend<STEP, N, ITER = QEMUParser<STEP, N>>,
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
 {
     let cmd: BackendCmd<STEP, N> = backend.command(program, arch);
 
-    let child = docker.launch(cmd.program, cmd.args).unwrap();
+    let child = launcher.launch(cmd.program, cmd.args).unwrap();
     let rx: QEMUParser<STEP, N> = backend.parse(child);
 
-    TraceDumper::analyze::<_, _, BACKEND, _, N>(&docker, rx, &arch);
-}
-
-fn launch_native<BACKEND, STEP, const N: usize>(
-    native: Native,
-    backend: BACKEND,
-    arch: Arch,
-    program: &PathBuf,
-) where
-    BACKEND: Backend<STEP, N, ITER = QEMUParser<STEP, N>>,
-    STEP: Step<N> + Send + 'static + fmt::Debug,
-    STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
-{
-    let cmd: BackendCmd<STEP, N> = backend.command(program, arch);
-
-    let child = native.launch(cmd.program, cmd.args).unwrap();
-    let rx: QEMUParser<STEP, N> = backend.parse(child);
-
-    TraceDumper::analyze::<_, _, BACKEND, _, N>(&native, rx, &arch);
+    TraceDumper::analyze::<_, _, BACKEND, _, N>(&launcher, rx, &arch);
 }
