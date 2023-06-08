@@ -40,7 +40,7 @@ impl LauncherArgs {
     fn start_backend(self, program: PathBuf, arch: Arch) -> Launchers {
         match self {
             LauncherArgs::Docker(x) => Launchers::Docker(x.start(program, arch)),
-            LauncherArgs::Native(x) => Launchers::Native(x.start(program, arch)),
+            LauncherArgs::Native(x) => Launchers::Native(x.start()),
         }
     }
 }

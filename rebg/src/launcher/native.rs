@@ -1,37 +1,24 @@
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command, Stdio},
 };
-
-use crate::arch::Arch;
 
 use super::Launcher;
 
 /// run directly
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "native")]
-pub struct NativeArgs {
-    #[argh(option, short = 'p')]
-    /// override path to qemu
-    pub path: Option<String>,
-}
+pub struct NativeArgs {}
 
 impl NativeArgs {
-    pub fn start(self, _program: PathBuf, arch: Arch) -> Native {
-        let path = self
-            .path
-            .unwrap_or_else(|| arch.qemu_user_bin().to_string());
-
-        Native { path }
+    pub fn start(self) -> Native {
+        // nothing to setup or copy files, they're already there
+        Native {}
     }
 }
 
-/// This has the setup image
-pub struct Native {
-    /// Path to qemu
-    pub path: String,
-}
+pub struct Native {}
 
 impl Launcher for Native {
     type Error = anyhow::Error;
@@ -41,7 +28,8 @@ impl Launcher for Native {
     }
 
     fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error> {
-        let child = dbg!(Command::new(&self.path).args(args))
+        let child = Command::new(&program)
+            .args(args)
             .stdin(Stdio::null()) // todo pass through from nc
             .stdout(Stdio::piped()) // same here
             .stderr(Stdio::piped()) // also use different file descriptors for qemu output so they dont collide
