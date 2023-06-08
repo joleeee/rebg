@@ -8,7 +8,7 @@ use crate::arch::Arch;
 
 use super::Launcher;
 
-/// Cli arguments for creation
+/// run inside docker
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "docker")]
 pub struct DockerArgs {

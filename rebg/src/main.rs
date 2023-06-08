@@ -22,7 +22,7 @@ struct Arguments {
     program: PathBuf,
 
     #[argh(option, short = 'a')]
-    /// architecture: arm, x64, ...
+    /// override architecure: arm, x64, ...
     arch: Option<Arch>,
 
     #[argh(subcommand)]

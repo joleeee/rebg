@@ -8,7 +8,7 @@ use crate::arch::Arch;
 
 use super::Launcher;
 
-/// Cli arguments for creation
+/// run directly
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "native")]
 pub struct NativeArgs {
