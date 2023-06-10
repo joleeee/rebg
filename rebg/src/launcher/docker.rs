@@ -183,12 +183,13 @@ impl Launcher for Docker {
 
         let child = Command::new("docker")
             .arg("exec")
+            .arg("-i") // keep stdin open
             .arg(&self.id)
             .arg(program)
             .args(args)
-            .stdin(Stdio::null()) // todo pass through from nc
-            .stdout(Stdio::piped()) // same here
-            .stderr(Stdio::piped()) // also use different file descriptors for qemu output so they dont collide
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::piped()) // todo use different file descriptors for qemu output so they dont collide
             .spawn()?;
 
         Ok(child)
