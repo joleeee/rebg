@@ -34,7 +34,15 @@ impl Analyzer for TraceDumper {
 
         let offsets = match iter.next().unwrap() {
             ParsedStep::LibLoad(x) => x,
-            x => panic!("Expected elfmsg: {:#?}", x),
+            ParsedStep::TraceStep(s) => panic!("Expected libload: {:#?}", s),
+            ParsedStep::Final(f) => {
+                let code = f.status.code();
+                if code == Some(139) {
+                    panic!("Segmentation fault");
+                } else {
+                    panic!("Expected libload: {:#?}", f);
+                }
+            }
         };
 
         // get symbol table from all binaries
