@@ -23,7 +23,7 @@ pub struct Symbol {
     pub to: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolTable {
     pub symbols: Vec<Symbol>,
 }
