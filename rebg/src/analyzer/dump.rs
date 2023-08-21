@@ -59,7 +59,7 @@ impl Analyzer for TraceDumper {
         // merge into a single table
         let table = symbol_tables
             .into_iter()
-            .reduce(|accum, item| accum.merge(item))
+            .reduce(|accum, item| accum.join(item))
             .unwrap();
 
         let mut trace = Vec::new();

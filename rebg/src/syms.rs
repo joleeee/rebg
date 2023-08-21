@@ -123,10 +123,15 @@ impl SymbolTable {
             .or_else(|| self.fallback.as_ref().and_then(|f| f.lookup(adr)))
     }
 
-    pub fn merge(self, mut other: Self) -> Self {
-        let mut symbols = self.symbols;
-        symbols.append(&mut other.symbols);
-        Self { symbols, ..self }
+    /// Will traverse through self's fallbacks until it comes to the end, it will then add other as
+    /// a fallback to that one
+    pub fn join(mut self, other: Self) -> Self {
+        if let Some(fallback) = self.fallback {
+            self.fallback = Some(Box::new(fallback.join(other)))
+        } else {
+            self.fallback = Some(Box::new(other));
+        }
+        self
     }
 }
 
