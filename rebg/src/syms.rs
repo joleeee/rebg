@@ -26,6 +26,7 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     pub symbols: Vec<Symbol>,
+    pub fallback: Option<Box<SymbolTable>>,
 }
 
 // https://developer.arm.com/documentation/100748/0620/Mapping-Code-and-Data-to-the-Target/Loading-armlink-generated-ELF-files-that-have-complex-scatter-files
@@ -90,7 +91,10 @@ impl SymbolTable {
             });
         }
 
-        Self { symbols }
+        Self {
+            symbols,
+            fallback: None,
+        }
     }
 
     /// offset based on where the binary is loaded
@@ -105,7 +109,7 @@ impl SymbolTable {
             })
             .collect();
 
-        Self { symbols }
+        Self { symbols, ..self }
     }
 
     pub fn lookup(&self, adr: u64) -> Option<SymbolReference> {
@@ -116,12 +120,13 @@ impl SymbolTable {
                 offset: adr - s.from,
                 symbol: s,
             })
+            .or_else(|| self.fallback.as_ref().and_then(|f| f.lookup(adr)))
     }
 
     pub fn merge(self, mut other: Self) -> Self {
         let mut symbols = self.symbols;
         symbols.append(&mut other.symbols);
-        Self { symbols }
+        Self { symbols, ..self }
     }
 }
 
@@ -146,6 +151,7 @@ mod tests {
 
         let table = SymbolTable {
             symbols: vec![sym1.clone(), sym2.clone()],
+            fallback: None,
         };
 
         // do the pie offset
