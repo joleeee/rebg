@@ -98,7 +98,7 @@ impl SymbolTable {
     }
 
     /// offset based on where the binary is loaded
-    pub fn pie(self, base: u64) -> Self {
+    pub fn add_offset(self, base: u64) -> Self {
         let symbols = self
             .symbols
             .into_iter()
@@ -160,7 +160,7 @@ mod tests {
         };
 
         // do the pie offset
-        let pie_table = table.pie(0x40_000);
+        let pie_table = table.add_offset(0x40_000);
 
         // this was inside main, but now main is offset by 0x40_000
         assert_eq!(pie_table.lookup(0x100), None);

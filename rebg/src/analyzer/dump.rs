@@ -52,7 +52,7 @@ impl Analyzer for TraceDumper {
             let elf = goblin::elf::Elf::parse(&contents).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let table = SymbolTable::from_elf(elf).pie(pie.0);
+            let table = SymbolTable::from_elf(elf).add_offset(pie.0);
 
             symbol_tables.push(table);
         }
