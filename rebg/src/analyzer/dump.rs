@@ -21,7 +21,7 @@ impl Analyzer for TraceDumper {
         launcher: &LAUNCHER,
         // inferred from BACKEND
         mut iter: ITER,
-        arch: &Arch,
+        arch: Arch,
     ) where
         STEP: Step<N> + std::fmt::Debug,
         // for inferance

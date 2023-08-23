@@ -91,11 +91,11 @@ fn main() {
         Arch::ARM64 => {
             let parser =
                 launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, target_arch, &program);
-            TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, &target_arch);
+            TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
         }
         Arch::X86_64 => {
             let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, target_arch, &program);
-            TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, &target_arch);
+            TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
         }
     }
 }

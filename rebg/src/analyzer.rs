@@ -13,7 +13,7 @@ pub trait Analyzer {
         launcher: &LAUNCHER,
         // inferred from BACKEND
         iter: ITER,
-        arch: &Arch,
+        arch: Arch,
     ) where
         STEP: Step<N> + fmt::Debug,
         LAUNCHER: Launcher,
