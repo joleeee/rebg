@@ -8,6 +8,7 @@ RUN apt-get install -y build-essential git python3 ninja-build pkg-config libgli
 RUN apt-get install -y \
     libc6-dbg-arm64-cross \
     libc6-dbg-amd64-cross \
+    libc6-dbg \
     libc6-amd64-i386-cross \
     libc6-amd64-x32-cross
 

@@ -1,6 +1,6 @@
 use capstone::{prelude::BuildsCapstone, Capstone};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Arch {
     ARM64,
     X86_64,

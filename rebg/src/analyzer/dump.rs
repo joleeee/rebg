@@ -8,9 +8,13 @@ use crate::{
     syms::SymbolTable,
 };
 use capstone::Capstone;
+use goblin::elf::Elf;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 /// Dumps the log
 pub struct TraceDumper {}
@@ -52,7 +56,9 @@ impl Analyzer for TraceDumper {
             let elf = goblin::elf::Elf::parse(&contents).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let table = SymbolTable::from_elf(elf).add_offset(pie.0);
+            let table = SymbolTable::from_elf(&elf).add_offset(pie.0);
+            
+            // TODO also add debug symbols if they are missing from the binary itself
 
             symbol_tables.push(table);
         }
@@ -85,7 +91,7 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        print_trace(&trace, &cs, Some(&table));
+        print_trace(&trace, launcher, &cs, Some(table.clone()), arch);
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);
@@ -99,12 +105,229 @@ impl Analyzer for TraceDumper {
     }
 }
 
-fn print_trace<STEP, const N: usize>(trace: &[STEP], cs: &Capstone, syms: Option<&SymbolTable>)
+fn decompose_syscall(strace: &str) -> Option<(String, Vec<String>, String)> {
+    lazy_static! {
+        // kinda low effort, will fail if there is a string argument with a comma
+        static ref RE: Regex = Regex::new(r#"(\w+)\(([^)]*)\) = (\w+)"#).unwrap();
+    }
+
+    let captures = RE.captures(&strace);
+
+    let captures = captures.map(|c| {
+        c.iter()
+            .skip(1)
+            .flatten()
+            .map(|m| m.as_str())
+            .collect::<Vec<_>>()
+    })?;
+
+    let mut captures = captures.into_iter();
+
+    let name = captures.next().expect("no name");
+
+    let arguments = captures.next().expect("no arguments group");
+    let arguments = arguments.split(",").map(|x| x.to_string()).collect();
+
+    let ret = captures.next().expect("no return value").to_string();
+
+    Some((name.to_string(), arguments, ret))
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+enum SyscallError {
+    #[error("bad format")]
+    BadFormat,
+    #[error("missing hex prefix")]
+    MissingHexPrefix,
+    #[error("unqoted string literal")]
+    UnqotedStringLiteral,
+    #[error("unknown fd")]
+    UnknownFd,
+    #[error("parse error: {0}")]
+    Parse(#[from] std::num::ParseIntError),
+}
+
+struct SyscallState {
+    fds: HashMap<i32, String>,
+}
+
+enum StateUpdate {
+    Mmap {
+        path: String,
+        addr: u64,
+        offset: u64,
+        size: u64,
+    },
+    Munmap {
+        addr: u64,
+        size: u64,
+    },
+}
+
+impl SyscallState {
+    fn new() -> Self {
+        Self {
+            fds: HashMap::new(),
+        }
+    }
+
+    fn register(&mut self, raw: &str) -> Result<Option<StateUpdate>, SyscallError> {
+        let (name, args, ret) = decompose_syscall(raw).ok_or(SyscallError::BadFormat)?;
+
+        let combined = args.join(", ");
+        println!("parsed: {}({}) -> {}", name, combined, ret);
+
+        match name.as_str() {
+            "openat" => {
+                let fd = ret.parse::<i32>()?;
+                let file = args[1]
+                    .strip_prefix('"')
+                    .ok_or(SyscallError::UnqotedStringLiteral)?
+                    .strip_suffix('"')
+                    .ok_or(SyscallError::UnqotedStringLiteral)?
+                    .to_string();
+                self.fds.insert(fd, file);
+                Ok(None)
+            }
+            "close" => {
+                let fd = args[0].parse::<i32>()?;
+                let err = ret.parse::<i32>()?;
+                if err == 0 {
+                    self.fds.remove(&fd);
+                }
+                Ok(None)
+            }
+            "mmap" => {
+                let len = args[1].parse::<u64>()?;
+                let fd = args[4].parse::<i32>()?;
+                let addr = u64::from_str_radix(
+                    ret.strip_prefix("0x")
+                        .ok_or(SyscallError::MissingHexPrefix)?,
+                    16,
+                )?;
+                let offset = if args[5] == "0" {
+                    0
+                } else {
+                    u64::from_str_radix(
+                        args[5]
+                            .strip_prefix("0x")
+                            .ok_or(SyscallError::MissingHexPrefix)?,
+                        16,
+                    )?
+                };
+
+                if fd != -1 {
+                    let path = self
+                        .fds
+                        .get(&fd)
+                        .ok_or(SyscallError::UnknownFd)?
+                        .to_string();
+                    println!("mmap {} {} {} {}", fd, path, offset, len);
+
+                    Ok(Some(StateUpdate::Mmap {
+                        path,
+                        addr,
+                        offset,
+                        size: len,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            }
+            "munmap" => {
+                let addr = if args[0] == "NULL" {
+                    0
+                } else {
+                    u64::from_str_radix(
+                        args[0]
+                            .strip_prefix("0x")
+                            .ok_or(SyscallError::MissingHexPrefix)?,
+                        16,
+                    )?
+                };
+                let len = args[1].parse::<u64>().unwrap();
+
+                Ok(Some(StateUpdate::Munmap { addr, size: len }))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
+fn find_debug_elf<'a, LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
 where
+    LAUNCHER: Launcher,
+    <LAUNCHER as Launcher>::Error: std::fmt::Debug,
+{
+    let prefix = &buildid[..2];
+    let suffix = &buildid[2..];
+
+    for platform in [
+        "/usr/lib/debug/.build-id",
+        "/usr/x86_64-linux-gnu/lib/debug/.build-id",
+        "/usr/aarch64-linux-gnu/lib/debug/.build-id",
+    ] {
+        let debug_sym_path = format!("{platform}/{prefix}/{suffix}.debug",);
+
+        println!("Trying {}", debug_sym_path);
+
+        let debug_sym = match launcher.read_file(&PathBuf::from(&debug_sym_path)) {
+            Ok(x) => x,
+            Err(e) => {
+                println!("nope {:?}", e);
+                continue;
+            }
+        };
+
+        let elf = match Elf::parse(&debug_sym) {
+            Ok(x) => x,
+            Err(e) => {
+                println!("cant read elf {:?}", e);
+                continue;
+            }
+        };
+
+        let dbg_arch = match Arch::from_elf(elf.header.e_machine) {
+            Ok(x) => x,
+            Err(e) => {
+                println!("cant read arch {:?}", e);
+                continue;
+            }
+        };
+
+        if dbg_arch != arch {
+            println!("wrong arch {:?}", dbg_arch);
+            continue;
+        }
+
+        println!(
+            "Found {} {:?} with {}",
+            debug_sym_path,
+            dbg_arch,
+            elf.syms.len()
+        );
+
+        return Some(debug_sym);
+    }
+
+    None
+}
+
+fn print_trace<STEP, LAUNCHER, const N: usize>(
+    trace: &[STEP],
+    launcher: &LAUNCHER,
+    cs: &Capstone,
+    mut syms: Option<SymbolTable>,
+    arch: Arch,
+) where
     <STEP as Step<N>>::STATE: State<N>,
     STEP: Step<N>,
+    LAUNCHER: Launcher,
+    <LAUNCHER as Launcher>::Error: std::fmt::Debug,
 {
     let mut previous_state: Option<STEP::STATE> = None;
+
+    let mut syscall_state = SyscallState::new();
 
     for step in trace {
         if let Some(previous) = previous_state {
@@ -120,9 +343,9 @@ where
 
         let disasm = cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
-        let op = inst_to_str(disasm.first().unwrap(), syms);
+        let op = inst_to_str(disasm.first().unwrap(), syms.as_ref());
 
-        let symbol = syms.and_then(|s| s.lookup(address));
+        let symbol = syms.as_ref().and_then(|s| s.lookup(address));
 
         let location = if let Some(ref symbol) = symbol {
             let symbol = format!("<{}>", symbol);
@@ -138,6 +361,82 @@ where
 
         if let Some(strace) = step.strace() {
             println!("syscall: {}", strace);
+
+            let update = syscall_state.register(strace);
+            match update {
+                Ok(Some(StateUpdate::Mmap {
+                    path,
+                    addr,
+                    offset,
+                    size,
+                })) => {
+                    //if offset != 0 {
+                    //    panic!("offset not implemented. mmap called with {}, for path {}", offset, path);
+                    //}
+
+                    let contents = launcher.read_file(Path::new(&path)).unwrap();
+
+                    //if size < contents.len() as u64 {
+                    //    panic!("cutting binary not implemented. binary is {}, but mmap called with {}, for path {}", contents.len(), size, path);
+                    //}
+
+                    let elf = Elf::parse(&contents);
+
+                    println!("MEMMMM");
+
+                    if let Ok(elf) = elf {
+                        let mut new_symbol_table = SymbolTable::from_elf(&elf);
+
+                        if elf.syms.is_empty() {
+                            eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
+
+                            // .note.gnu.build-id
+                            let buildid = elf
+                                .section_headers
+                                .iter()
+                                .find(|s| {
+                                    elf.shdr_strtab.get_at(s.sh_name) == Some(".note.gnu.build-id")
+                                })
+                                .unwrap();
+
+                            let buildid = {
+                                let id = &contents[buildid.file_range().unwrap()];
+                                // only use the last 20 bytes!!
+                                let id = &id[id.len() - 20..];
+                                hex::encode(id)
+                            };
+
+                            let bin = find_debug_elf(launcher, &buildid, arch);
+                            if let Some(bin) = bin {
+                                let bin = Elf::parse(&bin).ok();
+                                if let Some(bin) = bin {
+                                    new_symbol_table = new_symbol_table.extend_with_debug(
+                                        &bin,
+                                        offset,
+                                        offset + size,
+                                    );
+                                }
+                            }
+                        }
+
+                        // TODO size
+                        new_symbol_table = new_symbol_table.add_offset(addr);
+
+                        syms = if let Some(inner) = syms {
+                            Some(inner.join(new_symbol_table))
+                        } else {
+                            Some(new_symbol_table)
+                        };
+                    }
+                }
+                Ok(Some(StateUpdate::Munmap { addr: _, size: _ })) => {
+                    // TODO remove the symbols
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    println!("Error decoding syscall: {:?}", e);
+                }
+            }
         }
 
         // only print memory changes if we're in the user binary

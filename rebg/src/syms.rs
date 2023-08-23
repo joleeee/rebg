@@ -26,26 +26,20 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     pub symbols: Vec<Symbol>,
+    pub offsets: Vec<ProgramOffset>,
     pub fallback: Option<Box<SymbolTable>>,
+}
+#[derive(Debug, Clone, Copy)]
+pub struct ProgramOffset {
+    offset: u64,
+    addr: u64,
+    size: u64,
 }
 
 // https://developer.arm.com/documentation/100748/0620/Mapping-Code-and-Data-to-the-Target/Loading-armlink-generated-ELF-files-that-have-complex-scatter-files
 impl SymbolTable {
-    pub fn from_elf(elf: goblin::elf::Elf) -> Self {
-        // TODO support different vaddr and paddr
-        for ph in &elf.program_headers {
-            assert_eq!(ph.p_vaddr, ph.p_paddr);
-        }
-
-        #[derive(Debug)]
-        struct ProgramOffset {
-            offset: u64,
-            addr: u64,
-            size: u64,
-        }
-
-        let offsets = elf
-            .program_headers
+    fn get_offsets(elf: &goblin::elf::Elf) -> Vec<ProgramOffset> {
+        elf.program_headers
             .iter()
             .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
             .map(|ph| ProgramOffset {
@@ -54,27 +48,55 @@ impl SymbolTable {
                 size: ph.p_memsz, // memsz is possibly bigger than filesz because it contains bss
                                   // (default zeroed variables / data)
             })
-            .collect::<Vec<_>>();
+            .collect()
+    }
 
-        let mut symbols = Vec::new();
-        for sym in &elf.syms {
-            let name = elf
-                .strtab
-                .get_at(sym.st_name)
-                .expect("back to you, elf is sketchy");
+    pub fn intermediary_symbols(elf: &goblin::elf::Elf) -> Vec<(String, u64, u64)> {
+        elf.syms
+            .iter()
+            .map(|sym| {
+                let name = elf
+                    .strtab
+                    .get_at(sym.st_name)
+                    .expect("back to you, elf is sketchy");
+                let addr = sym.st_value;
+                let size = sym.st_size;
+                (name.to_string(), addr, size)
+            })
+            .collect()
+    }
 
+    /// Extend an existing elf with more debug symbols
+    pub fn extend_with_debug(self, debug: &goblin::elf::Elf, from: u64, to: u64) -> Self {
+        // TODO support different vaddr and paddr
+        for ph in &debug.program_headers {
+            assert_eq!(ph.p_vaddr, ph.p_paddr);
+        }
+
+        let syms = Self::intermediary_symbols(debug);
+
+        for o in &self.offsets {
+            println!("offset: {:#x} {:#x}", o.addr, o.addr + o.size);
+        }
+
+        let mut symbols = self.symbols;
+
+        for (name, addr, size) in syms {
             // https://sourceware.org/binutils/docs/as/AArch64-Mapping-Symbols.html
-            if matches!(name, "$d" | "$x") {
+            if matches!(name.as_str(), "$d" | "$x") {
                 continue;
             }
 
-            let base = sym.st_value;
-            let size = sym.st_size;
-
             // find the header it is in
-            let offset = offsets
-                .iter()
-                .find(|o| o.addr <= base && base < o.addr + o.size);
+            let offset = &self.offsets.iter().find(|offset| {
+                let offset_lower = offset.addr;
+                let offset_upper = offset.addr + offset.size;
+
+                let sym_lower = addr;
+                let sym_upper = addr + size;
+
+                offset_lower <= sym_lower && sym_upper <= offset_upper
+            });
             let offset = if let Some(offset) = offset {
                 offset
             } else {
@@ -83,19 +105,37 @@ impl SymbolTable {
 
             // remove any offset which in the symbol so it's now just realtive to the runtime
             // address
-            let base = base + offset.offset - offset.addr;
+            let sym_from = addr + offset.offset - offset.addr;
+            let sym_to = sym_from + size;
+
+            if sym_from < from || sym_to > to {
+                continue;
+            }
 
             symbols.push(Symbol {
                 name: name.to_string(),
-                from: base,
-                to: base + size,
+                from: sym_from,
+                to: sym_to,
             });
         }
 
-        Self {
-            symbols,
+        println!("Now {} symbols", symbols.len());
+
+        Self { symbols, ..self }
+    }
+
+    pub fn from_elf(elf: &goblin::elf::Elf) -> Self {
+        let offsets = Self::get_offsets(&elf);
+
+        let empty = Self {
+            offsets,
+            symbols: vec![],
             fallback: None,
-        }
+        };
+
+        let filled = empty.extend_with_debug(elf, u64::MIN, u64::MAX);
+
+        filled
     }
 
     /// offset based on where the binary is loaded
@@ -157,6 +197,7 @@ mod tests {
 
         let table = SymbolTable {
             symbols: vec![sym1.clone(), sym2.clone()],
+            offsets: vec![],
             fallback: None,
         };
 
