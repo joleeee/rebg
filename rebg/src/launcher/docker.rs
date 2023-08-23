@@ -161,8 +161,8 @@ impl Launcher for Docker {
         // read it
         let bytes = fs::read("/tmp/rebg-tmp")?;
 
-        // delete /tmp/rebg.tmp from the local machine
-        fs::remove_file("/tmp/rebg-tmp")?;
+        // delete /tmp/rebg-tmp from the local machine
+        //fs::remove_file("/tmp/rebg-tmp")?;
 
         Ok(bytes)
     }
