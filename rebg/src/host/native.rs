@@ -4,7 +4,7 @@ use std::{
     process::{Child, Command, Stdio},
 };
 
-use super::Launcher;
+use super::Host;
 
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "native")]
@@ -20,7 +20,7 @@ impl NativeArgs {
 
 pub struct Native {}
 
-impl Launcher for Native {
+impl Host for Native {
     type Error = anyhow::Error;
 
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, anyhow::Error> {

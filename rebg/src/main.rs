@@ -2,13 +2,13 @@ use rebg::analyzer::dump::TraceDumper;
 use rebg::analyzer::Analyzer;
 use rebg::backend::qemu::QEMUParser;
 use rebg::backend::BackendCmd;
-use rebg::launcher::docker::{Docker, DockerArgs};
-use rebg::launcher::native::{Native, NativeArgs};
+use rebg::host::docker::{Docker, DockerArgs};
+use rebg::host::native::{Native, NativeArgs};
 use rebg::state::{Aarch64Step, Step, X64Step};
 use rebg::{
     arch::Arch,
     backend::{qemu::QEMU, Backend},
-    launcher::Launcher,
+    host::Host,
 };
 use std::fmt;
 use std::path::Path;
@@ -50,7 +50,7 @@ enum Launchers {
     Native(Native),
 }
 
-impl Launcher for Launchers {
+impl Host for Launchers {
     type Error = anyhow::Error;
 
     fn launch(
@@ -107,7 +107,7 @@ fn launch_qemu<LAUNCHER, BACKEND, STEP, const N: usize>(
     program: &Path,
 ) -> QEMUParser<STEP, N>
 where
-    LAUNCHER: Launcher<Error = anyhow::Error>,
+    LAUNCHER: Host<Error = anyhow::Error>,
     BACKEND: Backend<STEP, N, ITER = QEMUParser<STEP, N>>,
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,

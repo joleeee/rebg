@@ -2,7 +2,7 @@ use super::Analyzer;
 use crate::{
     arch::Arch,
     backend::ParsedStep,
-    launcher::Launcher,
+    host::Host,
     rstate,
     state::{MemoryOp, MemoryOpKind, State, Step},
     syms::SymbolTable,
@@ -29,8 +29,8 @@ impl Analyzer for TraceDumper {
     ) where
         STEP: Step<N> + std::fmt::Debug,
         // for inferance
-        LAUNCHER: Launcher,
-        <LAUNCHER as Launcher>::Error: std::fmt::Debug,
+        LAUNCHER: Host,
+        <LAUNCHER as Host>::Error: std::fmt::Debug,
         BACKEND: crate::backend::Backend<STEP, N, ITER = ITER>,
         ITER: Iterator<Item = ParsedStep<STEP, N>>,
     {
@@ -57,7 +57,7 @@ impl Analyzer for TraceDumper {
 
             let pie = offsets.get(path).unwrap();
             let table = SymbolTable::from_elf(&elf).add_offset(pie.0);
-            
+
             // TODO also add debug symbols if they are missing from the binary itself
 
             symbol_tables.push(table);
@@ -256,8 +256,8 @@ impl SyscallState {
 
 fn find_debug_elf<'a, LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
 where
-    LAUNCHER: Launcher,
-    <LAUNCHER as Launcher>::Error: std::fmt::Debug,
+    LAUNCHER: Host,
+    <LAUNCHER as Host>::Error: std::fmt::Debug,
 {
     let prefix = &buildid[..2];
     let suffix = &buildid[2..];
@@ -322,8 +322,8 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
 ) where
     <STEP as Step<N>>::STATE: State<N>,
     STEP: Step<N>,
-    LAUNCHER: Launcher,
-    <LAUNCHER as Launcher>::Error: std::fmt::Debug,
+    LAUNCHER: Host,
+    <LAUNCHER as Host>::Error: std::fmt::Debug,
 {
     let mut previous_state: Option<STEP::STATE> = None;
 

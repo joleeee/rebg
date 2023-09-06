@@ -6,7 +6,7 @@ use std::{
 
 use crate::arch::Arch;
 
-use super::Launcher;
+use super::Host;
 
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "docker")]
@@ -145,7 +145,7 @@ impl Docker {
     }
 }
 
-impl Launcher for Docker {
+impl Host for Docker {
     type Error = anyhow::Error;
 
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, anyhow::Error> {
