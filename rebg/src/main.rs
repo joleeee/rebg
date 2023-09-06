@@ -1,14 +1,14 @@
 use rebg::analyzer::dump::TraceDumper;
 use rebg::analyzer::Analyzer;
-use rebg::backend::qemu::QEMUParser;
-use rebg::backend::BackendCmd;
 use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
 use rebg::state::{Aarch64Step, Step, X64Step};
+use rebg::tracer::qemu::QEMUParser;
+use rebg::tracer::TracerCmd;
 use rebg::{
     arch::Arch,
-    backend::{qemu::QEMU, Backend},
     host::Host,
+    tracer::{qemu::QEMU, Tracer},
 };
 use std::fmt;
 use std::path::Path;
@@ -37,7 +37,7 @@ enum LauncherArgs {
 }
 
 impl LauncherArgs {
-    fn start_backend(self, program: PathBuf, arch: Arch) -> Launchers {
+    fn start_tracer(self, program: PathBuf, arch: Arch) -> Launchers {
         match self {
             LauncherArgs::Docker(x) => Launchers::Docker(x.start(program, arch)),
             LauncherArgs::Native(x) => Launchers::Native(x.start()),
@@ -85,7 +85,7 @@ fn main() {
 
     let qemu = QEMU {};
 
-    let launcher = launcher.start_backend(program.clone(), target_arch);
+    let launcher = launcher.start_tracer(program.clone(), target_arch);
 
     match target_arch {
         Arch::ARM64 => {
@@ -100,21 +100,21 @@ fn main() {
     }
 }
 
-fn launch_qemu<LAUNCHER, BACKEND, STEP, const N: usize>(
+fn launch_qemu<LAUNCHER, TRACER, STEP, const N: usize>(
     launcher: &LAUNCHER,
-    backend: BACKEND,
+    tracer: TRACER,
     arch: Arch,
     program: &Path,
 ) -> QEMUParser<STEP, N>
 where
     LAUNCHER: Host<Error = anyhow::Error>,
-    BACKEND: Backend<STEP, N, ITER = QEMUParser<STEP, N>>,
+    TRACER: Tracer<STEP, N, ITER = QEMUParser<STEP, N>>,
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
 {
-    let cmd: BackendCmd<STEP, N> = backend.command(program, arch);
+    let cmd: TracerCmd<STEP, N> = tracer.command(program, arch);
 
     let child = launcher.launch(cmd.program, cmd.args).unwrap();
 
-    backend.parse(child)
+    tracer.parse(child)
 }

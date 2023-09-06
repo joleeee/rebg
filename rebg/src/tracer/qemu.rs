@@ -1,6 +1,6 @@
 use anyhow::Context;
 
-use super::{Backend, BackendCmd, ParsedStep};
+use super::{ParsedStep, Tracer, TracerCmd};
 use crate::{arch::Arch, state::Step};
 use std::{
     collections::HashMap,
@@ -14,14 +14,14 @@ use std::{
 
 pub struct QEMU {}
 
-impl<STEP, const N: usize> Backend<STEP, N> for QEMU
+impl<STEP, const N: usize> Tracer<STEP, N> for QEMU
 where
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
 {
     type ITER = QEMUParser<STEP, N>;
 
-    fn command(&self, executable: &Path, arch: Arch) -> BackendCmd<STEP, N> {
+    fn command(&self, executable: &Path, arch: Arch) -> TracerCmd<STEP, N> {
         let qemu = arch.qemu_user_bin().to_string();
 
         let options = vec![
@@ -33,7 +33,7 @@ where
             executable.to_str().unwrap().to_string(),
         ];
 
-        BackendCmd {
+        TracerCmd {
             program: qemu,
             args: options,
             _step: PhantomData,

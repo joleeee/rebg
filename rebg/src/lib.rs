@@ -3,8 +3,8 @@
 
 pub mod analyzer;
 pub mod arch;
-pub mod backend;
 pub mod host;
 pub mod rstate;
 pub mod state;
 pub mod syms;
+pub mod tracer;

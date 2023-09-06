@@ -16,16 +16,16 @@ where
 
 /// - Gives the specific tracer to be ran, with options
 /// - Parses output
-pub trait Backend<STEP, const N: usize>
+pub trait Tracer<STEP, const N: usize>
 where
     STEP: Step<N>,
 {
     type ITER: Iterator<Item = ParsedStep<STEP, N>>;
-    fn command(&self, executable: &Path, arch: Arch) -> BackendCmd<STEP, N>;
+    fn command(&self, executable: &Path, arch: Arch) -> TracerCmd<STEP, N>;
     fn parse(&self, proc: Child) -> Self::ITER;
 }
 
-pub struct BackendCmd<STEP, const N: usize>
+pub struct TracerCmd<STEP, const N: usize>
 where
     STEP: Step<N>,
 {

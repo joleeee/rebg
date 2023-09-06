@@ -1,11 +1,11 @@
 use super::Analyzer;
 use crate::{
     arch::Arch,
-    backend::ParsedStep,
     host::Host,
     rstate,
     state::{MemoryOp, MemoryOpKind, State, Step},
     syms::SymbolTable,
+    tracer::ParsedStep,
 };
 use capstone::Capstone;
 use goblin::elf::Elf;
@@ -20,10 +20,10 @@ use std::{
 pub struct TraceDumper {}
 
 impl Analyzer for TraceDumper {
-    fn analyze<STEP, LAUNCHER, BACKEND, ITER, const N: usize>(
+    fn analyze<STEP, LAUNCHER, TRACER, ITER, const N: usize>(
         // to read files
         launcher: &LAUNCHER,
-        // inferred from BACKEND
+        // inferred from TRACER
         mut iter: ITER,
         arch: Arch,
     ) where
@@ -31,7 +31,7 @@ impl Analyzer for TraceDumper {
         // for inferance
         LAUNCHER: Host,
         <LAUNCHER as Host>::Error: std::fmt::Debug,
-        BACKEND: crate::backend::Backend<STEP, N, ITER = ITER>,
+        TRACER: crate::tracer::Tracer<STEP, N, ITER = ITER>,
         ITER: Iterator<Item = ParsedStep<STEP, N>>,
     {
         let cs = arch.make_capstone().unwrap();
