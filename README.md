@@ -31,14 +31,19 @@ docker compose up --build -d
 ```
 
 ## Exec into container
-```
+```sh
 docker compose exec develop /bin/bash
 ```
 
 ## Configure & compile
-```
+```sh
 root@54541497458c:~/qemu# ./configure --with-git-submodules=ignore --enable-tcg-interpreter --target-list=aarch64-linux-user,x86_64-linux-user
 root@54541497458c:~/qemu# make -j $(nproc)
+```
+
+## Run & test
+```sh
+root@54541497458c:~/qemu# ./build/aarch64-linux-user/qemu-aarch64 /bin/ls
 ```
 
 This mounts the folder in qemu so you can edit in your normal editor and build it and test it in the docker.
