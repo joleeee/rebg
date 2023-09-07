@@ -1,0 +1,11 @@
+version: '3'
+services:
+  develop:
+    image: rebg-dev
+    build:
+      context: ./ # Replace with the path to your DEVELOPING Dockerfile and context
+      dockerfile: compiler.Dockerfile
+    container_name: rebg-dev
+    volumes:
+      - ./qemu:/root/qemu # Mount the same QEMU source code into the develop container
+    #command: sleep infinity

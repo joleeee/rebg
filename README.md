@@ -21,6 +21,28 @@ If you're using macos and tracing `linux/amd64`, you can cut runtime by about
 - Web ui
 - Efficently storing memory history.
 
+# Developing QEMU in docker
+To spawn a container you can build and run qemu inside, you can use the following commands
+
+## Start container
+```sh
+cd tools
+docker compose up --build -d
+```
+
+## Exec into container
+```
+docker compose exec develop /bin/bash
+```
+
+## Configure & compile
+```
+root@54541497458c:~/qemu# ./configure --with-git-submodules=ignore --enable-tcg-interpreter --target-list=aarch64-linux-user,x86_64-linux-user
+root@54541497458c:~/qemu# make -j $(nproc)
+```
+
+This mounts the folder in qemu so you can edit in your normal editor and build it and test it in the docker.
+
 # Developer debugging tips
 Use a computer or VPS with a lot of cores to debug qemu, it's going to compile
 a lot faster. At least spawn a persistent docker if you you're not natively on
