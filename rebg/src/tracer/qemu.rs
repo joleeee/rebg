@@ -8,8 +8,9 @@ use std::{
     io::{BufRead, BufReader},
     marker::PhantomData,
     mem,
+    net::{TcpListener, TcpStream},
     path::Path,
-    process::{Child, ChildStderr},
+    process::Child,
 };
 
 pub struct QEMU {}
@@ -26,7 +27,9 @@ where
 
         let options = vec![
             String::from("-rebglog"),
-            String::from("/dev/stderr"),
+            String::from("/dev/null"),
+            String::from("-rebgtcp"),
+            String::from("host.docker.internal:1337"),
             String::from("-one-insn-per-tb"),
             String::from("-d"),
             String::from("in_asm,strace"),
@@ -54,7 +57,7 @@ pub struct QEMUParser<STEP, const N: usize> {
     /// None when done
     proc: Option<Child>,
 
-    stderr: BufReader<ChildStderr>,
+    reader: BufReader<TcpStream>,
     _phantom: PhantomData<STEP>,
 }
 
@@ -95,7 +98,7 @@ where
 
             // otherwise, read one more line
             let mut stderr_buf = String::new();
-            let result = self.stderr.read_line(&mut stderr_buf).unwrap();
+            let result = self.reader.read_line(&mut stderr_buf).unwrap();
 
             // EOF
             if result == 0 {
@@ -122,13 +125,19 @@ where
 }
 
 impl<STEP, const N: usize> QEMUParser<STEP, N> {
-    fn new(mut proc: Child) -> Self {
-        let stderr = proc.stderr.take().unwrap();
-        let stderr = BufReader::new(stderr);
+    fn new(proc: Child) -> Self {
+        let listener = TcpListener::bind("[::]:1337").unwrap();
+
+        println!("Waiting for connection...");
+        let con = listener.incoming().next().unwrap().unwrap();
+        println!("Connected! {:?}", con);
+        drop(listener); // close the socket, keep the connection, me THINKS
+
+        let reader = BufReader::new(con);
 
         Self {
             proc: Some(proc),
-            stderr,
+            reader,
             _phantom: PhantomData,
         }
     }
