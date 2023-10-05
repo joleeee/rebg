@@ -21,6 +21,18 @@ If you're using macos and tracing `linux/amd64`, you can cut runtime by about
 - Web ui
 - Efficently storing memory history.
 
+# Setup
+Most is not documented, if you find anything that's not obvious, please just
+send me an email or open an issue!
+
+## Build the docker container(s)
+We use an augmented qemu to trace binaries, so compile them:
+```
+cd tools
+docker build --platform linux/arm64 . -t rebg:arm64
+docker build --platform linux/amd64 . -t rebg:amd64
+```
+
 # Developing QEMU in docker
 To spawn a container you can build and run qemu inside, you can use the following commands
 
