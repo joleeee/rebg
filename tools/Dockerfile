@@ -26,4 +26,5 @@ WORKDIR /root
 RUN rm -r qemu
 
 # stick around
-ENTRYPOINT ["sleep", "infinity"]
+# 1h is kinda built-in cleanup
+ENTRYPOINT ["sleep", "1h"]
