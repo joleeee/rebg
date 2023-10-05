@@ -1,10 +1,9 @@
 <script>
     export let depth, idx, adr, asm;
 
-    // nbps
-    $: indent = "\u00A0".repeat(depth);
+    $: indent = "\u00A0".repeat(depth); // nbsp
     $: index = parseInt(idx).toString().padStart(4, "\u00A0");
-    $: address = "0x" + parseInt(adr).toString(16)
+    $: address = "0x" + parseInt(adr).toString(16);
 </script>
 
 <div>
