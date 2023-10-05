@@ -151,20 +151,39 @@ impl Host for Docker {
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, anyhow::Error> {
         let realpath = self.get_absolute_path(path)?;
 
-        // copy it out
-        Command::new("docker")
-            .arg("cp")
-            .arg(format!("{}:{}", self.id, realpath))
-            .arg("/tmp/rebg-tmp")
-            .output()?;
+        let contents: Vec<u8> = tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let docker = bollard::Docker::connect_with_local_defaults().unwrap();
 
-        // read it
-        let bytes = fs::read("/tmp/rebg-tmp")?;
+            docker
+                .download_from_container(
+                    &self.id,
+                    Some(DownloadFromContainerOptions { path: realpath }),
+                )
+                .try_collect::<Vec<_>>()
+                .await
+                .unwrap()
+                .into_iter()
+                .flatten()
+                .collect()
+        });
 
-        // delete /tmp/rebg-tmp from the local machine
-        //fs::remove_file("/tmp/rebg-tmp")?;
+        let mut archive = tar::Archive::new(&contents[..]);
 
-        Ok(bytes)
+        let mut output = None;
+
+        for file in archive.entries().unwrap() {
+            let mut file = file.unwrap();
+
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).unwrap();
+
+            if output.is_some() {
+                panic!("multiple files in tar");
+            }
+            output = Some(bytes);
+        }
+
+        Ok(output.expect("no files in tar"))
     }
 
     fn launch(&self, program: String, mut args: Vec<String>) -> Result<Child, Self::Error> {
