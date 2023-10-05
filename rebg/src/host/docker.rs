@@ -1,12 +1,13 @@
+use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions};
+use futures::TryStreamExt;
 use std::{
-    fs,
+    io::Read,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
 };
 
-use crate::arch::Arch;
-
 use super::Host;
+use crate::arch::Arch;
 
 #[derive(argh::FromArgs)]
 #[argh(subcommand, name = "docker")]
@@ -29,67 +30,66 @@ pub struct DockerSpawner {
 }
 
 impl DockerSpawner {
-    fn spawn_container(&self) -> String {
+    async fn spawn_container(&self) -> String {
+        let docker = bollard::Docker::connect_with_local_defaults().unwrap();
+
         // stop any previous container
-        let mut stop = Command::new("docker")
-            .arg("kill")
-            .arg("rebg-runner")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .stdout(Stdio::null())
-            .spawn()
-            .unwrap();
-        stop.wait().unwrap();
+        docker
+            .kill_container::<&str>("rebg-runner", None)
+            .await
+            .ok(); // ignoring result
 
         // delete previous instance
-        let mut rm = Command::new("docker")
-            .arg("rm")
-            .arg("rebg-runner")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .stdout(Stdio::null())
-            .spawn()
-            .unwrap();
-        rm.wait().unwrap();
+        docker.remove_container("rebg-runner", None).await.ok(); // ignoring result
+
+        // set up bind mount (bleh)
+        let path_mount = format!(
+            "{}/container:/container",
+            std::env::current_dir().unwrap().to_str().unwrap()
+        );
 
         // spawn container (background)
-        let run = Command::new("docker")
-            .arg("run")
-            .arg("-d")
-            .args(["--platform", self.arch.docker_platform()])
-            .arg("--name=rebg-runner")
-            .arg(format!(
-                "-v={}/container:/container",
-                std::env::current_dir().unwrap().to_str().unwrap()
-            ))
-            .arg(&self.image)
-            .stdin(Stdio::null())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
+        let container = docker
+            .create_container(
+                Some(CreateContainerOptions {
+                    name: "rebg-runner",
+                    platform: Some(self.arch.docker_platform()),
+                }),
+                Config {
+                    host_config: Some(bollard::service::HostConfig {
+                        binds: Some(vec![path_mount]),
+                        ..Default::default()
+                    }),
+                    image: Some(self.image.clone()),
+                    cmd: None,
+                    tty: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await
             .unwrap();
 
-        let output = run.wait_with_output().unwrap();
-        if !output.status.success() {
-            panic!("Failed to start the container: {:#?}", output);
-        }
-        let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
-
-        println!("Spawned new runner with id: {}", id);
+        docker
+            .start_container::<String>(&container.id, None)
+            .await
+            .unwrap();
 
         // copy program into container
-        let cp = Command::new("cp")
+        Command::new("cp")
             .arg(&self.program)
             .arg("container/")
             .spawn()
+            .unwrap()
+            .wait_with_output()
             .unwrap();
-        cp.wait_with_output().unwrap();
 
-        id
+        container.id
     }
 
     pub fn spawn(self) -> Docker {
-        let id = self.spawn_container();
+        let id = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(self.spawn_container());
         Docker {
             target_arch: self.arch,
             id,
@@ -151,20 +151,39 @@ impl Host for Docker {
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, anyhow::Error> {
         let realpath = self.get_absolute_path(path)?;
 
-        // copy it out
-        Command::new("docker")
-            .arg("cp")
-            .arg(format!("{}:{}", self.id, realpath))
-            .arg("/tmp/rebg-tmp")
-            .output()?;
+        let contents: Vec<u8> = tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let docker = bollard::Docker::connect_with_local_defaults().unwrap();
 
-        // read it
-        let bytes = fs::read("/tmp/rebg-tmp")?;
+            docker
+                .download_from_container(
+                    &self.id,
+                    Some(DownloadFromContainerOptions { path: realpath }),
+                )
+                .try_collect::<Vec<_>>()
+                .await
+                .unwrap()
+                .into_iter()
+                .flatten()
+                .collect()
+        });
 
-        // delete /tmp/rebg-tmp from the local machine
-        //fs::remove_file("/tmp/rebg-tmp")?;
+        let mut archive = tar::Archive::new(&contents[..]);
 
-        Ok(bytes)
+        let mut output = None;
+
+        for file in archive.entries().unwrap() {
+            let mut file = file.unwrap();
+
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).unwrap();
+
+            if output.is_some() {
+                panic!("multiple files in tar");
+            }
+            output = Some(bytes);
+        }
+
+        Ok(output.expect("no files in tar"))
     }
 
     fn launch(&self, program: String, mut args: Vec<String>) -> Result<Child, Self::Error> {
