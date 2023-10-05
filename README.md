@@ -46,6 +46,24 @@ root@54541497458c:~/qemu# make -j $(nproc)
 root@54541497458c:~/qemu# ./build/aarch64-linux-user/qemu-aarch64 /bin/ls
 ```
 
+## Test with nc
+First, spawn a listener. For some reason ipv4 requests to v6 listener is
+automatically translated to ipv6.
+```sh
+root@94772de42933:~/qemu# while true; do echo -e '\n\n===='; nc -6 -lnvp 1337; done
+====
+Listening on :: 1337
+Connection received on ::ffff:127.0.0.1 48382
+elflibload|/usr/bin/ls|5500000000|550202f53f
+elflibload|/lib/ld-linux-aarch64.so.1|5502831000|550286e36f
+regs|pc=5502848c40|r0=0|r1=0|r2=0|r3=0|r4=0|r5=0|r6=0|r7=0|r8=0|r9=0|r10=0|r11=0|r12=0|r13=0|r14=0|r15=0|r16=0|r17=0|r18=0|r19=0|r20=0|r21=0|r22=0|r23=0|r24=0|r25=0|r26=0|r27=0|r28=0|r29=0|r30=0|r31=5502830740|flags=40000010
+```
+
+Then, somewhere else, build and run!
+```sh
+root@94772de42933:~/qemu# make -j $(nproc) && ./build/aarch64-linux-user/qemu-aarch64 -rebgtcp localhost:1337 -rebglog /dev/null /bin/ls
+```
+
 This mounts the folder in qemu so you can edit in your normal editor and build it and test it in the docker.
 
 # Developer debugging tips
