@@ -1,27 +1,37 @@
 <script>
-    import { selectedAddress } from "./stores.js";
+    import { selectedAddress, selectedIdx } from "./stores.js";
+    const addressSelected = "#ff000060";
+    const idxSelected = "#ff0000c0";
 
     export let depth, idx, adr, asm;
-
     $: indent = "\u00A0".repeat(depth); // nbsp
     $: index = parseInt(idx).toString().padStart(4, "\u00A0");
     $: address = "0x" + parseInt(adr).toString(16);
 
     function click() {
         selectedAddress.set(address);
+        selectedIdx.set(index);
     }
 
-    let selected = null;
-    $: highlight = selected == address;
-
-    selectedAddress.subscribe((x) => (selected = x));
+    let selectedA = null;
+    let selectedI = null;
+    selectedAddress.subscribe((x) => (selectedA = x));
+    selectedIdx.subscribe((x) => (selectedI = x));
+    $: highlightAdr = selectedA == address;
+    $: highlightIdx = selectedI == idx;
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div on:click={click}>
-    <span class="i">{indent}{index}</span>
-    <span class="adr" style={highlight ? "background-color: #ff000088;" : ""}
+    <span
+        class="idx"
+        style={highlightIdx ? `background-color: ${idxSelected};` : ""}
+        >{indent}{index}</span
+    >
+    <span
+        class="adr"
+        style={highlightAdr ? `background-color: ${addressSelected};` : ""}
         >{address}</span
     >
     <span>{asm}</span>
@@ -31,9 +41,8 @@
     div {
         font-family: monospace;
     }
-    .i {
+    .idx {
         color: blue;
-        background-color: white;
     }
     .adr {
         color: red;
