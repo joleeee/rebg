@@ -15,7 +15,7 @@ pub use x64::{X64Flags, X64State, X64Step};
 use crate::arch::Arch;
 
 /// A single step in the trace.
-pub trait Step<const N: usize>: Clone {
+pub trait Step<const N: usize>: Clone + std::marker::Send + 'static {
     type STATE: State<N>;
     type INSTRUMENT: Instrument;
     // static architecture
@@ -60,6 +60,7 @@ pub enum Branching {
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Instrumentation {
     pub branch: Option<Branching>,
+    pub disassembly: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

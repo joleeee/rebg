@@ -12,11 +12,14 @@ use capstone::Capstone;
 use goblin::elf::Elf;
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde_json::json;
+use std::net::TcpListener;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     rc::Rc,
 };
+use tungstenite::accept;
 
 /// Dumps the log
 pub struct TraceDumper {}
@@ -102,8 +105,10 @@ impl Analyzer for TraceDumper {
         let mut instrumentations = Vec::new();
 
         let mut bt = Vec::new();
+        let mut bt_lens = Vec::new();
 
         for cur_step in &trace {
+            bt_lens.push(bt.len());
             let instrumentation = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
             let prev_instrumentation = instrumentations.iter().rev().skip(1).next();
@@ -112,6 +117,7 @@ impl Analyzer for TraceDumper {
             match prev_instrumentation {
                 Some(Instrumentation {
                     branch: Some(prev_branch),
+                    disassembly: _,
                 }) => match prev_branch {
                     Branching::Call(target, return_address) => {
                         // 1. if we are at target, it's a normal call
@@ -160,7 +166,7 @@ impl Analyzer for TraceDumper {
         }
 
         // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
-        assert_eq!(instrumentations.last(), Some(&Default::default()));
+        assert_eq!(instrumentations.last().and_then(|x| x.branch.clone()), None);
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);
@@ -170,6 +176,30 @@ impl Analyzer for TraceDumper {
         }
         if !result.stderr.is_empty() {
             println!("stderr:\n{}", String::from_utf8(result.stderr).unwrap());
+        }
+
+        let server = TcpListener::bind("127.0.0.1:9001").unwrap();
+        for stream in server.incoming() {
+            let trace = trace.clone();
+            let instrumentations = instrumentations.clone();
+            let bt_lens = bt_lens.clone();
+            std::thread::spawn(move || {
+                let mut ws = accept(stream.unwrap()).unwrap();
+                for (i, ((step, instru), bt_len)) in trace
+                    .into_iter()
+                    .zip(instrumentations.into_iter())
+                    .zip(bt_lens.into_iter())
+                    .enumerate()
+                {
+                    ws.send(tungstenite::Message::Text(
+                        serde_json::to_string(
+                            &json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len}),
+                        )
+                        .unwrap(),
+                    ))
+                    .unwrap();
+                }
+            });
         }
     }
 }
@@ -531,7 +561,10 @@ where
 
         self.hist.push(step.state().clone());
 
-        Instrumentation { branch }
+        Instrumentation {
+            branch,
+            disassembly: op,
+        }
     }
 }
 
