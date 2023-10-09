@@ -122,6 +122,7 @@ impl Analyzer for TraceDumper {
 
                         let is_invisible = cur_step.state().pc() == *return_address;
                         if is_invisible {
+                            println!(">>> INVISIBLE");
                             continue;
                         }
 
