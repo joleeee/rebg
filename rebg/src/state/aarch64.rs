@@ -167,8 +167,19 @@ impl Instrument for Aarch64Instrument {
             let mnem = insn.mnemonic().unwrap();
             match mnem {
                 "bl" => {
-                    // TODO
-                    None
+                    let operand = {
+                        let ops: Vec<_> =
+                            detail.arch_detail().arm64().unwrap().operands().collect();
+                        assert_eq!(ops.len(), 1);
+                        ops[0].clone()
+                    };
+
+                    let operand_val = match operand.op_type {
+                        capstone::arch::arm64::Arm64OperandType::Imm(val) => val,
+                        _ => panic!("bl without imm argument {:?}", operand.op_type),
+                    };
+
+                    Some(Branching::Call(operand_val as u64))
                 }
                 "blr" => {
                     let operand = {
