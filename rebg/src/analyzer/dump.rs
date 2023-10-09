@@ -14,6 +14,7 @@ use regex::Regex;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 /// Dumps the log
@@ -91,7 +92,10 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        print_trace(&trace, launcher, &cs, Some(table.clone()), arch);
+        let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table.clone());
+        for step in &trace {
+            analyzer.step(launcher, step);
+        }
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);
@@ -313,27 +317,40 @@ where
     None
 }
 
-fn print_trace<STEP, LAUNCHER, const N: usize>(
-    trace: &[STEP],
-    launcher: &LAUNCHER,
-    cs: &Capstone,
-    mut syms: Option<SymbolTable>,
-    arch: Arch,
-) where
-    <STEP as Step<N>>::STATE: State<N>,
+struct RealAnalyzer<STEP /* , LAUNCHER*/, const N: usize>
+where
     STEP: Step<N>,
-    LAUNCHER: Host,
-    <LAUNCHER as Host>::Error: std::fmt::Debug,
 {
-    let mut previous_state: Option<STEP::STATE> = None;
+    hist: Vec<STEP::STATE>,
+    cs: Rc<Capstone>,
+    syms: SymbolTable,
+    arch: Arch,
+    syscall_state: SyscallState,
+}
 
-    let mut syscall_state = SyscallState::new();
+impl<STEP, const N: usize> RealAnalyzer<STEP, /*, LAUNCHER,*/ N>
+where
+    STEP: Step<N>,
+{
+    fn new(cs: Rc<Capstone>, arch: Arch, syms: SymbolTable) -> Self {
+        Self {
+            hist: Vec::new(),
+            cs,
+            syms,
+            arch,
+            syscall_state: SyscallState::new(),
+        }
+    }
 
-    for step in trace {
-        if let Some(previous) = previous_state {
+    fn step<LAUNCHER>(&mut self, launcher: &LAUNCHER, step: &STEP)
+    where
+        LAUNCHER: Host,
+        <LAUNCHER as Host>::Error: std::fmt::Debug,
+    {
+        if let Some(previous) = self.hist.last() {
             let current = step.state();
 
-            let diff = rstate::diff(&previous, current);
+            let diff = rstate::diff(previous, current);
             diff.print::<STEP::STATE>();
             println!();
         }
@@ -341,11 +358,11 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
         let address = step.address();
         let code = step.code();
 
-        let disasm = cs.disasm_all(code, address).unwrap();
+        let disasm = self.cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
-        let op = inst_to_str(disasm.first().unwrap(), syms.as_ref());
+        let op = inst_to_str(disasm.first().unwrap(), Some(&self.syms));
 
-        let symbol = syms.as_ref().and_then(|s| s.lookup(address));
+        let symbol = self.syms.lookup(address);
 
         let location = if let Some(ref symbol) = symbol {
             let symbol = format!("<{}>", symbol);
@@ -362,7 +379,7 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
         if let Some(strace) = step.strace() {
             println!("syscall: {}", strace);
 
-            let update = syscall_state.register(strace);
+            let update = self.syscall_state.register(strace);
             match update {
                 Ok(Some(StateUpdate::Mmap {
                     path,
@@ -406,7 +423,7 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
                                 hex::encode(id)
                             };
 
-                            let bin = find_debug_elf(launcher, &buildid, arch);
+                            let bin = find_debug_elf(launcher, &buildid, self.arch);
                             if let Some(bin) = bin {
                                 let bin = Elf::parse(&bin).ok();
                                 if let Some(bin) = bin {
@@ -422,11 +439,7 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
                         // TODO size
                         new_symbol_table = new_symbol_table.add_offset(addr);
 
-                        syms = if let Some(inner) = syms {
-                            Some(inner.join(new_symbol_table))
-                        } else {
-                            Some(new_symbol_table)
-                        };
+                        self.syms = self.syms.clone().join(new_symbol_table);
                     }
                 }
                 Ok(Some(StateUpdate::Munmap { addr: _, size: _ })) => {
@@ -454,15 +467,8 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
             println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
         }
 
-        previous_state = Some(step.state().clone());
+        self.hist.push(step.state().clone());
     }
-
-    let bytes = std::mem::size_of_val(&trace[0]) * trace.len();
-    eprintln!(
-        "Used {}kB of memory for {} steps",
-        bytes / 1024,
-        trace.len()
-    );
 }
 
 fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {
