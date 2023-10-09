@@ -7,7 +7,7 @@ use crate::{
     syms::SymbolTable,
     tracer::ParsedStep,
 };
-use capstone::Capstone;
+use capstone::{prelude::DetailsArchInsn, Capstone};
 use goblin::elf::Elf;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -93,9 +93,23 @@ impl Analyzer for TraceDumper {
         };
 
         let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table.clone());
+        let mut depth = 0;
         for step in &trace {
-            analyzer.step(launcher, step);
+            let instrumentation = analyzer.step(launcher, step);
+            if let Some(branching) = instrumentation.branch {
+                match branching {
+                    Branching::Call(target) => {
+                        depth += 1;
+                        println!(">>> {:3} Calling {:x}", depth, target);
+                    }
+                    Branching::Return => {
+                        depth -= 1;
+                        println!(">>> {:3} Returning", depth);
+                    }
+                }
+            }
         }
+        // print_trace(&trace, launcher, &cs, Some(table.clone()), arch);
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);
@@ -317,6 +331,16 @@ where
     None
 }
 
+enum Branching {
+    Call(u64), // todo u32 for 32bit arch etc
+    Return,
+}
+
+#[derive(Default)]
+struct Instrumentation {
+    branch: Option<Branching>,
+}
+
 struct RealAnalyzer<STEP /* , LAUNCHER*/, const N: usize>
 where
     STEP: Step<N>,
@@ -342,7 +366,7 @@ where
         }
     }
 
-    fn step<LAUNCHER>(&mut self, launcher: &LAUNCHER, step: &STEP)
+    fn step<LAUNCHER>(&mut self, launcher: &LAUNCHER, step: &STEP) -> Instrumentation
     where
         LAUNCHER: Host,
         <LAUNCHER as Host>::Error: std::fmt::Debug,
@@ -361,6 +385,16 @@ where
         let disasm = self.cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
         let op = inst_to_str(disasm.first().unwrap(), Some(&self.syms));
+
+        let detail = self
+            .cs
+            .insn_detail(disasm.first().unwrap())
+            .expect("no detail");
+        let groups = detail.groups();
+        let group_names = groups
+            .iter()
+            .map(|g| self.cs.group_name(*g).unwrap())
+            .collect::<Vec<_>>();
 
         let symbol = self.syms.lookup(address);
 
@@ -452,6 +486,49 @@ where
             }
         }
 
+        let mut branch = None;
+
+        let is_call_insn = { group_names.contains(&"call".to_string()) };
+        let is_ret_insn = { group_names.contains(&"return".to_string()) };
+        if is_call_insn {
+            let mnem = disasm.first().unwrap().mnemonic().unwrap();
+            let detail = self.cs.insn_detail(disasm.first().unwrap()).unwrap();
+            match mnem {
+                "bl" => {}
+                "blr" => {
+                    let arm: Vec<_> = detail.arch_detail().arm64().unwrap().operands().collect();
+                    assert_eq!(arm.len(), 1);
+                    let operand = &arm[0];
+
+                    let operand_nr = match operand.op_type {
+                        capstone::arch::arm64::Arm64OperandType::Reg(r) => r,
+                        _ => panic!("unexpected"),
+                    };
+
+                    let operand_str = self.cs.reg_name(operand_nr).unwrap();
+                    let operand_nr = operand_str
+                        .strip_prefix("x")
+                        .unwrap()
+                        .parse::<u32>()
+                        .unwrap();
+
+                    // TODO: think about if we should actually use previous state instead of this current/next state?
+                    let target = step.state().regs()[operand_nr as usize];
+
+                    branch = Some(Branching::Call(target));
+
+                    dbg!(operand_str);
+                }
+                _x => {
+                    panic!("Unknown call mnem {}", _x);
+                }
+            }
+        }
+        if is_ret_insn {
+            assert!(branch.is_none());
+            branch = Some(Branching::Return);
+        }
+
         // only print memory changes if we're in the user binary
         for MemoryOp {
             address,
@@ -468,6 +545,8 @@ where
         }
 
         self.hist.push(step.state().clone());
+
+        Instrumentation { branch }
     }
 }
 
