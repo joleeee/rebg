@@ -341,7 +341,7 @@ struct Instrumentation {
     branch: Option<Branching>,
 }
 
-struct RealAnalyzer<STEP /* , LAUNCHER*/, const N: usize>
+struct RealAnalyzer<STEP, const N: usize>
 where
     STEP: Step<N>,
 {
@@ -352,7 +352,7 @@ where
     syscall_state: SyscallState,
 }
 
-impl<STEP, const N: usize> RealAnalyzer<STEP, /*, LAUNCHER,*/ N>
+impl<STEP, const N: usize> RealAnalyzer<STEP, N>
 where
     STEP: Step<N>,
 {
