@@ -108,7 +108,6 @@ impl Analyzer for TraceDumper {
         let mut bt_lens = Vec::new();
 
         for cur_step in &trace {
-            bt_lens.push(bt.len());
             let instrumentation = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
             let prev_instrumentation = instrumentations.iter().rev().skip(1).next();
@@ -130,20 +129,19 @@ impl Analyzer for TraceDumper {
                         let is_invisible = cur_step.state().pc() == *return_address;
                         if is_invisible {
                             println!(">>> INVISIBLE");
-                            continue;
+                        } else {
+                            bt.push(*return_address);
+
+                            let sym_txt = {
+                                let sym = analyzer.syms.lookup(*target);
+                                if let Some(sym) = sym {
+                                    format!(" = <{}>", sym)
+                                } else {
+                                    String::new()
+                                }
+                            };
+                            println!(">>> {:3} Calling {:x}{}", bt.len(), target, sym_txt);
                         }
-
-                        bt.push(*return_address);
-
-                        let sym_txt = {
-                            let sym = analyzer.syms.lookup(*target);
-                            if let Some(sym) = sym {
-                                format!(" = <{}>", sym)
-                            } else {
-                                String::new()
-                            }
-                        };
-                        println!(">>> {:3} Calling {:x}{}", bt.len(), target, sym_txt);
                     }
                     Branching::Return => {
                         // find where in the backtrace we are
@@ -163,6 +161,8 @@ impl Analyzer for TraceDumper {
                 },
                 _ => {}
             }
+
+            bt_lens.push(bt.len());
         }
 
         // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
@@ -177,6 +177,9 @@ impl Analyzer for TraceDumper {
         if !result.stderr.is_empty() {
             println!("stderr:\n{}", String::from_utf8(result.stderr).unwrap());
         }
+
+        assert_eq!(trace.len(), instrumentations.len());
+        assert_eq!(trace.len(), bt_lens.len());
 
         let server = TcpListener::bind("127.0.0.1:9001").unwrap();
         for stream in server.incoming() {
