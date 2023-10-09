@@ -10,6 +10,7 @@ use crate::{
 };
 use capstone::Capstone;
 use goblin::elf::Elf;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::json;
@@ -188,19 +189,24 @@ impl Analyzer for TraceDumper {
             let bt_lens = bt_lens.clone();
             std::thread::spawn(move || {
                 let mut ws = accept(stream.unwrap()).unwrap();
-                for (i, ((step, instru), bt_len)) in trace
+
+                let iter = trace
                     .into_iter()
                     .zip(instrumentations.into_iter())
                     .zip(bt_lens.into_iter())
-                    .enumerate()
-                {
-                    ws.send(tungstenite::Message::Text(
-                        serde_json::to_string(
-                            &json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len}),
-                        )
-                        .unwrap(),
-                    ))
-                    .unwrap();
+                    .enumerate();
+
+                let chunked = iter.chunks(100);
+
+                for chunk in &chunked {
+                    let mut parts = Vec::new();
+
+                    for (i, ((step, instru), bt_len)) in chunk {
+                        parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len}));
+                    }
+
+                    let json = serde_json::to_string(&parts).unwrap();
+                    ws.send(tungstenite::Message::Text(json)).unwrap();
                 }
             });
         }

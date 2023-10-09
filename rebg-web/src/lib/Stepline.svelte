@@ -145,9 +145,11 @@
         socket = new WebSocket("ws://localhost:9001");
         socket.addEventListener("open", () => (steps = []));
         socket.addEventListener("message", (event) => {
-            let msg = JSON.parse(event.data);
-            let new_step = [msg.d, msg.i, msg.a, msg.c];
-            steps = [...steps, new_step];
+            let msgs = JSON.parse(event.data);
+            msgs.forEach((msg) => {
+                let new_step = [msg.d, msg.i, msg.a, msg.c];
+                steps = [...steps, new_step];
+            });
         });
     });
 </script>
