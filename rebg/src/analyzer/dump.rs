@@ -384,12 +384,10 @@ where
 
         let disasm = self.cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
-        let op = inst_to_str(disasm.first().unwrap(), Some(&self.syms));
+        let insn = &disasm[0];
+        let op = inst_to_str(&insn, Some(&self.syms));
 
-        let detail = self
-            .cs
-            .insn_detail(disasm.first().unwrap())
-            .expect("no detail");
+        let detail = self.cs.insn_detail(insn).expect("no detail");
         let groups = detail.groups();
         let group_names = groups
             .iter()
@@ -491,8 +489,8 @@ where
         let is_call_insn = { group_names.contains(&"call".to_string()) };
         let is_ret_insn = { group_names.contains(&"return".to_string()) };
         if is_call_insn {
-            let mnem = disasm.first().unwrap().mnemonic().unwrap();
-            let detail = self.cs.insn_detail(disasm.first().unwrap()).unwrap();
+            let mnem = insn.mnemonic().unwrap();
+            let detail = self.cs.insn_detail(insn).unwrap();
             match mnem {
                 "bl" => {}
                 "blr" => {
