@@ -93,24 +93,54 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table.clone());
+        let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table);
+
+        // we want changes to instantly show up in the UI, but we are also
+        // dependent on the next step for some analysis, so we need to first
+        // send the raw step, then later send the analyzed step
+
         let mut depth = 0;
-        for step in &trace {
-            let instrumentation = analyzer.step(launcher, step);
-            if let Some(branching) = instrumentation.branch {
-                match branching {
+        let mut instrumentations = Vec::new();
+
+        for cur_step in &trace {
+            let instrumentation = analyzer.step(launcher, cur_step);
+            instrumentations.push(instrumentation);
+            let prev_instrumentation = instrumentations.iter().rev().skip(1).next();
+
+            // do for the PREVIOUS branch
+            match prev_instrumentation {
+                Some(Instrumentation {
+                    branch: Some(prev_branch),
+                }) => match prev_branch {
                     Branching::Call(target) => {
+                        if cur_step.state().pc() != *target {
+                            // this is some built-in that we seem to jump to but
+                            // we don't get the trace inside there!
+                            continue;
+                        }
+
                         depth += 1;
-                        println!(">>> {:3} Calling {:x}", depth, target);
+                        let sym_txt = {
+                            let sym = analyzer.syms.lookup(*target);
+                            if let Some(sym) = sym {
+                                format!(" = <{}>", sym)
+                            } else {
+                                String::new()
+                            }
+                        };
+                        println!(">>> {:3} Calling {:x}{}", depth, target, sym_txt);
                     }
                     Branching::Return => {
                         println!(">>> {:3} Returning", depth);
                         depth -= 1;
                     }
-                }
+                },
+                _ => {}
             }
         }
-        // print_trace(&trace, launcher, &cs, Some(table.clone()), arch);
+
+        // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
+        assert_eq!(instrumentations.last(), Some(&Default::default()));
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);

@@ -42,19 +42,24 @@ pub trait State<const N: usize>: Clone {
 }
 
 pub trait Instrument {
-    fn recover_branch(&self, cs: &capstone::Capstone, insn: &Insn, detail: &InsnDetail) -> Option<Branching>;
+    fn recover_branch(
+        &self,
+        cs: &capstone::Capstone,
+        insn: &Insn,
+        detail: &InsnDetail,
+    ) -> Option<Branching>;
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Branching {
     Call(u64), // todo u32 for 32bit arch etc
     Return,
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Instrumentation {
     pub branch: Option<Branching>,
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MemoryOpKind {
