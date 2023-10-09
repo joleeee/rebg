@@ -112,7 +112,7 @@ impl Analyzer for TraceDumper {
                 Some(Instrumentation {
                     branch: Some(prev_branch),
                 }) => match prev_branch {
-                    Branching::Call(target) => {
+                    Branching::Call(target, _) => {
                         if cur_step.state().pc() != *target {
                             // this is some built-in that we seem to jump to but
                             // we don't get the trace inside there!

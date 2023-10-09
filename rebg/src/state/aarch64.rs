@@ -165,6 +165,7 @@ impl Instrument for Aarch64Instrument {
 
         if is_call_insn {
             let mnem = insn.mnemonic().unwrap();
+            let return_address = insn.address() + insn.len() as u64;
             match mnem {
                 "bl" => {
                     let operand = {
@@ -179,7 +180,9 @@ impl Instrument for Aarch64Instrument {
                         _ => panic!("bl without imm argument {:?}", operand.op_type),
                     };
 
-                    Some(Branching::Call(operand_val as u64))
+                    let to = operand_val as u64;
+
+                    Some(Branching::Call(to, return_address))
                 }
                 "blr" => {
                     let operand = {
@@ -206,7 +209,7 @@ impl Instrument for Aarch64Instrument {
                     // TODO: think about if we should actually use previous state instead of this current/next state?
                     let target_address = self.step.state().regs()[reg_nr as usize];
 
-                    Some(Branching::Call(target_address))
+                    Some(Branching::Call(target_address, return_address))
                 }
                 _x => {
                     eprintln!("Unknown Aarch64 call mnemonic: {}", _x);

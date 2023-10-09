@@ -52,7 +52,8 @@ pub trait Instrument {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Branching {
-    Call(u64), // todo u32 for 32bit arch etc
+    // (to, return to)
+    Call(u64, u64),
     Return,
 }
 
