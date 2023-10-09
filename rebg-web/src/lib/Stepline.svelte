@@ -1,4 +1,5 @@
 <script>
+    import { onMount } from "svelte";
     import Step from "./Step.svelte";
 
     export let steps = [
@@ -138,6 +139,17 @@
         [3, 133, "0x0000005500806414", "mov sp, x29"],
         [3, 134, "0x0000005500806418", "ldp x19, x20, [sp, #0x10]"],
     ];
+
+    let socket;
+    onMount(() => {
+        socket = new WebSocket("ws://localhost:9001");
+        socket.addEventListener("open", () => (steps = []));
+        socket.addEventListener("message", (event) => {
+            let msg = JSON.parse(event.data);
+            let new_step = [msg.d, msg.i, msg.a, msg.c];
+            steps = [...steps, new_step];
+        });
+    });
 </script>
 
 <div class="outer">
