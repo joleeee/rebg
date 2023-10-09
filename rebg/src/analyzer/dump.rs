@@ -419,15 +419,7 @@ where
                     offset,
                     size,
                 })) => {
-                    //if offset != 0 {
-                    //    panic!("offset not implemented. mmap called with {}, for path {}", offset, path);
-                    //}
-
                     let contents = launcher.read_file(Path::new(&path)).unwrap();
-
-                    //if size < contents.len() as u64 {
-                    //    panic!("cutting binary not implemented. binary is {}, but mmap called with {}, for path {}", contents.len(), size, path);
-                    //}
 
                     let elf = Elf::parse(&contents);
 
@@ -439,7 +431,6 @@ where
                         if elf.syms.is_empty() {
                             eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
 
-                            // .note.gnu.build-id
                             let buildid = elf
                                 .section_headers
                                 .iter()
