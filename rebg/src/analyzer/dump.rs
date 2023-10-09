@@ -1,13 +1,14 @@
 use super::Analyzer;
+use crate::state::{Branching, Instrument};
 use crate::{
     arch::Arch,
     host::Host,
     rstate,
-    state::{MemoryOp, MemoryOpKind, State, Step},
+    state::{Instrumentation, MemoryOp, MemoryOpKind, State, Step},
     syms::SymbolTable,
     tracer::ParsedStep,
 };
-use capstone::{prelude::DetailsArchInsn, Capstone};
+use capstone::Capstone;
 use goblin::elf::Elf;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -103,8 +104,8 @@ impl Analyzer for TraceDumper {
                         println!(">>> {:3} Calling {:x}", depth, target);
                     }
                     Branching::Return => {
-                        depth -= 1;
                         println!(">>> {:3} Returning", depth);
+                        depth -= 1;
                     }
                 }
             }
@@ -331,16 +332,6 @@ where
     None
 }
 
-enum Branching {
-    Call(u64), // todo u32 for 32bit arch etc
-    Return,
-}
-
-#[derive(Default)]
-struct Instrumentation {
-    branch: Option<Branching>,
-}
-
 struct RealAnalyzer<STEP, const N: usize>
 where
     STEP: Step<N>,
@@ -388,11 +379,6 @@ where
         let op = inst_to_str(&insn, Some(&self.syms));
 
         let detail = self.cs.insn_detail(insn).expect("no detail");
-        let groups = detail.groups();
-        let group_names = groups
-            .iter()
-            .map(|g| self.cs.group_name(*g).unwrap())
-            .collect::<Vec<_>>();
 
         let symbol = self.syms.lookup(address);
 
@@ -475,48 +461,8 @@ where
             }
         }
 
-        let mut branch = None;
-
-        let is_call_insn = { group_names.contains(&"call".to_string()) };
-        let is_ret_insn = { group_names.contains(&"return".to_string()) };
-        if is_call_insn {
-            let mnem = insn.mnemonic().unwrap();
-            let detail = self.cs.insn_detail(insn).unwrap();
-            match mnem {
-                "bl" => {}
-                "blr" => {
-                    let arm: Vec<_> = detail.arch_detail().arm64().unwrap().operands().collect();
-                    assert_eq!(arm.len(), 1);
-                    let operand = &arm[0];
-
-                    let operand_nr = match operand.op_type {
-                        capstone::arch::arm64::Arm64OperandType::Reg(r) => r,
-                        _ => panic!("unexpected"),
-                    };
-
-                    let operand_str = self.cs.reg_name(operand_nr).unwrap();
-                    let operand_nr = operand_str
-                        .strip_prefix("x")
-                        .unwrap()
-                        .parse::<u32>()
-                        .unwrap();
-
-                    // TODO: think about if we should actually use previous state instead of this current/next state?
-                    let target = step.state().regs()[operand_nr as usize];
-
-                    branch = Some(Branching::Call(target));
-
-                    dbg!(operand_str);
-                }
-                _x => {
-                    panic!("Unknown call mnem {}", _x);
-                }
-            }
-        }
-        if is_ret_insn {
-            assert!(branch.is_none());
-            branch = Some(Branching::Return);
-        }
+        let instrum = step.instrument();
+        let branch = instrum.recover_branch(&self.cs, &insn, &detail);
 
         // only print memory changes if we're in the user binary
         for MemoryOp {

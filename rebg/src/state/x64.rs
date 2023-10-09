@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::arch::Arch;
 
-use super::{GenericState, GenericStep, MemoryOp, State, Step};
+use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use bitflags::bitflags;
 
 #[derive(Clone, Debug)]
@@ -39,6 +39,12 @@ impl Step<16> for X64Step {
 
     fn memory_ops(&self) -> &[super::MemoryOp] {
         &self.memory_ops
+    }
+
+    type INSTRUMENT = X64Instrument;
+
+    fn instrument(&self) -> Self::INSTRUMENT {
+        X64Instrument {}
     }
 }
 
@@ -119,6 +125,18 @@ impl TryFrom<&[String]> for X64Step {
             strace: generic.strace,
             memory_ops: generic.memory_ops,
         })
+    }
+}
+pub struct X64Instrument {}
+impl Instrument for X64Instrument {
+    fn recover_branch(
+        &self,
+        _cs: &capstone::Capstone,
+        _insn: &capstone::Insn,
+        _detail: &capstone::InsnDetail,
+    ) -> Option<Branching> {
+        // TODO
+        None
     }
 }
 

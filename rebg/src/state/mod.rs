@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use bitflags::Flags;
+use capstone::{Insn, InsnDetail};
 use hex::FromHex;
 use num_traits::Num;
 
@@ -16,6 +17,7 @@ use crate::arch::Arch;
 /// A single step in the trace.
 pub trait Step<const N: usize>: Clone {
     type STATE: State<N>;
+    type INSTRUMENT: Instrument;
     // static architecture
     fn arch(&self) -> Arch;
 
@@ -26,6 +28,8 @@ pub trait Step<const N: usize>: Clone {
     fn address(&self) -> u64;
     fn strace(&self) -> Option<&String>;
     fn memory_ops(&self) -> &[MemoryOp];
+
+    fn instrument(&self) -> Self::INSTRUMENT;
 }
 
 /// Register values and flags
@@ -36,6 +40,21 @@ pub trait State<const N: usize>: Clone {
     fn reg_name(i: usize) -> &'static str;
     fn flags(&self) -> &Self::FLAGS;
 }
+
+pub trait Instrument {
+    fn recover_branch(&self, cs: &capstone::Capstone, insn: &Insn, detail: &InsnDetail) -> Option<Branching>;
+}
+
+pub enum Branching {
+    Call(u64), // todo u32 for 32bit arch etc
+    Return,
+}
+
+#[derive(Default)]
+pub struct Instrumentation {
+    pub branch: Option<Branching>,
+}
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MemoryOpKind {
