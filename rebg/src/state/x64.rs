@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use crate::arch::Arch;
+
 use super::{GenericState, GenericStep, MemoryOp, State, Step};
 use bitflags::bitflags;
 
@@ -14,6 +16,10 @@ pub struct X64Step {
 
 impl Step<16> for X64Step {
     type STATE = X64State;
+
+    fn arch(&self) -> Arch {
+        Arch::X86_64
+    }
 
     fn code(&self) -> &[u8] {
         &self.code[..]

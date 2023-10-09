@@ -11,9 +11,14 @@ pub use aarch64::{Aarch64Flags, Aarch64State, Aarch64Step};
 pub mod x64;
 pub use x64::{X64Flags, X64State, X64Step};
 
+use crate::arch::Arch;
+
 /// A single step in the trace.
 pub trait Step<const N: usize>: Clone {
     type STATE: State<N>;
+    // static architecture
+    fn arch(&self) -> Arch;
+
     fn code(&self) -> &[u8];
     // this also contains the pc
     fn state(&self) -> &Self::STATE;
