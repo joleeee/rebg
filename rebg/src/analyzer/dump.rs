@@ -112,10 +112,16 @@ impl Analyzer for TraceDumper {
                 Some(Instrumentation {
                     branch: Some(prev_branch),
                 }) => match prev_branch {
-                    Branching::Call(target, _) => {
-                        if cur_step.state().pc() != *target {
-                            // this is some built-in that we seem to jump to but
-                            // we don't get the trace inside there!
+                    Branching::Call(target, return_address) => {
+                        // 1. if we are at target, it's a normal call
+
+                        // 2. if we are at the next address, it means nothing of it was traced
+
+                        // 3. otherwise, i think it's our code -> invisible code -> our code
+                        // so we should still do depth += 1 (or actually more?)
+
+                        let is_invisible = cur_step.state().pc() == *return_address;
+                        if is_invisible {
                             continue;
                         }
 
