@@ -99,8 +99,9 @@ impl Analyzer for TraceDumper {
         // dependent on the next step for some analysis, so we need to first
         // send the raw step, then later send the analyzed step
 
-        let mut depth = 0;
         let mut instrumentations = Vec::new();
+
+        let mut bt = Vec::new();
 
         for cur_step in &trace {
             let instrumentation = analyzer.step(launcher, cur_step);
@@ -126,7 +127,8 @@ impl Analyzer for TraceDumper {
                             continue;
                         }
 
-                        depth += 1;
+                        bt.push(*return_address);
+
                         let sym_txt = {
                             let sym = analyzer.syms.lookup(*target);
                             if let Some(sym) = sym {
@@ -135,11 +137,22 @@ impl Analyzer for TraceDumper {
                                 String::new()
                             }
                         };
-                        println!(">>> {:3} Calling {:x}{}", depth, target, sym_txt);
+                        println!(">>> {:3} Calling {:x}{}", bt.len(), target, sym_txt);
                     }
                     Branching::Return => {
-                        println!(">>> {:3} Returning", depth);
-                        depth -= 1;
+                        // find where in the backtrace we are
+                        let idx = bt.iter().position(|v| *v == cur_step.state().pc());
+
+                        if let Some(idx) = idx {
+                            let removed: Vec<_> = bt.drain(idx..).collect();
+                            println!(
+                                ">>> {:3} RETURN: removing {} elements",
+                                bt.len(),
+                                removed.len()
+                            );
+                        } else {
+                            println!(">>> WARNING RETURN: could not find in backtrace!");
+                        }
                     }
                 },
                 _ => {}
