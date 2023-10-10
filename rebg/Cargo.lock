@@ -927,6 +927,7 @@ dependencies = [
  "num-traits",
  "oneshot",
  "regex",
+ "serde",
  "serde_json",
  "tar",
  "thiserror",

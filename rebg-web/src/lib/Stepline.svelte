@@ -143,20 +143,58 @@
     let socket;
     onMount(() => {
         socket = new WebSocket("ws://localhost:9001");
-        socket.addEventListener("open", () => (steps = []));
+        socket.addEventListener("open", () => {
+            steps = [];
+        });
         socket.addEventListener("message", (event) => {
             let msgs = JSON.parse(event.data);
-            msgs.forEach((msg) => {
-                let new_step = [msg.d, msg.i, msg.a, msg.c];
-                steps = [...steps, new_step];
-            });
+            if (msgs.hasOwnProperty("steps")) {
+                recv_steps(msgs.steps);
+            }
+            if (msgs.hasOwnProperty("registers")) {
+                recv_registers(msgs.registers);
+            }
         });
     });
+
+    function recv_steps(msgs) {
+        msgs.forEach((step) => {
+            let new_step = [step.d, step.i, step.a, step.c];
+            steps = [...steps, new_step];
+        });
+    }
+
+    function recv_registers(registers) {
+        let index = registers.idx;
+        let regs = registers.registers;
+        console.log(index, regs);
+    }
+
+    function step_selected(step) {
+        if (!socket) {
+            return;
+        }
+        if (socket.CONNECTING) {
+            return;
+        }
+        step = step.detail;
+
+        let selected_idx = step.index;
+
+        // ask backend for registers at this point
+        socket.send(JSON.stringify({ registers: selected_idx }));
+    }
 </script>
 
 <div class="outer">
     {#each steps as step}
-        <Step depth={step[0]} idx={step[1]} adr={step[2]} asm={step[3]} />
+        <Step
+            on:selected={step_selected}
+            depth={step[0]}
+            idx={step[1]}
+            adr={step[2]}
+            asm={step[3]}
+        />
     {/each}
 </div>
 

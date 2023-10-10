@@ -1,5 +1,5 @@
 use super::Analyzer;
-use crate::state::{Branching, Instrument};
+use crate::state::{self, Branching, Instrument};
 use crate::{
     arch::Arch,
     host::Host,
@@ -188,10 +188,11 @@ impl Analyzer for TraceDumper {
             let instrumentations = instrumentations.clone();
             let bt_lens = bt_lens.clone();
             std::thread::spawn(move || {
+                // first send all addresses etc
                 let mut ws = accept(stream.unwrap()).unwrap();
 
                 let iter = trace
-                    .into_iter()
+                    .iter()
                     .zip(instrumentations.into_iter())
                     .zip(bt_lens.into_iter())
                     .enumerate();
@@ -205,8 +206,48 @@ impl Analyzer for TraceDumper {
                         parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len}));
                     }
 
-                    let json = serde_json::to_string(&parts).unwrap();
+                    let json = serde_json::to_string(&json!({"steps": parts})).unwrap();
                     ws.send(tungstenite::Message::Text(json)).unwrap();
+                }
+
+                // then send register values on request
+                loop {
+                    let msg = ws.read().unwrap();
+
+                    let msg = match msg {
+                        tungstenite::Message::Text(text) => text,
+                        tungstenite::Message::Close(_c) => {
+                            // println!("Closing: {:?}", c);
+                            break;
+                        }
+                        _ => continue,
+                    };
+
+                    #[derive(serde::Deserialize, serde::Serialize)]
+                    #[serde(rename_all = "snake_case")]
+                    enum RebgRequest {
+                        Registers(u64),
+                    }
+
+                    let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
+                    match msg {
+                        RebgRequest::Registers(idx) => {
+                            let step = trace.get(idx as usize).unwrap();
+                            let regs = step.state().regs();
+                            let pairs = regs.iter().enumerate().map(|(idx, value)| {
+                                let name = <STEP as state::Step<N>>::STATE::reg_name(idx as usize);
+                                (name, value)
+                            });
+                            let pairs: Vec<_> = pairs.collect();
+
+                            let serialized = serde_json::to_string(
+                                &json!({"registers": {"idx": idx, "registers": pairs}}),
+                            )
+                            .unwrap();
+
+                            ws.send(tungstenite::Message::Text(serialized)).unwrap();
+                        }
+                    }
                 }
             });
         }

@@ -1,5 +1,7 @@
 <script>
+    import { createEventDispatcher } from "svelte";
     import { selectedAddress, selectedIdx } from "./stores.js";
+    const dispatch = createEventDispatcher();
     const addressSelected = "#ff000060";
     const idxSelected = "#ff0000c0";
 
@@ -9,6 +11,7 @@
     $: address = "0x" + parseInt(adr).toString(16);
 
     function click() {
+        dispatch("selected", { index: idx, address: adr });
         selectedAddress.set(address);
         selectedIdx.set(index);
     }
