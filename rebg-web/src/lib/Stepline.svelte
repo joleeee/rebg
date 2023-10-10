@@ -176,7 +176,7 @@
             case "j":
                 // this is important, js lmao (0 """is""" false)
                 if (selected_idx !== null) {
-                    selected_idx = Math.min(selected_idx + 1, steps.length);
+                    selected_idx = Math.min(selected_idx + 1, steps.length - 1);
                 }
                 break;
             case "k":
