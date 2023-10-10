@@ -160,16 +160,13 @@
         });
     }
 
-    function step_selected(step) {
-        step = step.detail;
-
-        let selected_idx = step.index;
-
-        // ask backend for registers at this point
-        if (!connected) {
-            return;
-        }
+    let selected_idx = null;
+    $: if (selected_idx != null && connected) {
         sendStore.set(JSON.stringify({ registers: selected_idx }));
+    }
+
+    function step_selected(step) {
+        selected_idx = step.detail.index;
     }
 </script>
 
