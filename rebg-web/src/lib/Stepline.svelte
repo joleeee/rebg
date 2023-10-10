@@ -156,12 +156,7 @@
 
 <div class="outer">
     {#each steps as step}
-        <Step
-            depth={parseInt(step[0].toString())}
-            idx={step[1]}
-            adr={step[2]}
-            asm={step[3]}
-        />
+        <Step depth={step[0]} idx={step[1]} adr={step[2]} asm={step[3]} />
     {/each}
 </div>
 
