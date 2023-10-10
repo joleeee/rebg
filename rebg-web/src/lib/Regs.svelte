@@ -1,12 +1,22 @@
 <script>
-    import { onMount } from "svelte";
-    import Step from "./Step.svelte";
     import Reg from "./Reg.svelte";
+    import { registerStore, stepStore } from "./ws";
 
     export let regs = [
         ["rax", 1234],
         ["rsp", 133713371337],
     ];
+
+    registerStore.subscribe(recv_registers);
+
+    function recv_registers(registers) {
+        if (registers === null) {
+            return;
+        }
+        let index = registers.idx;
+        let regs = registers.registers;
+        console.log(index, regs);
+    }
 </script>
 
 <div class="outer">

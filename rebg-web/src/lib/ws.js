@@ -1,14 +1,15 @@
 import { writable } from "svelte/store";
 
-export const sendStore = writable();
-export const connected = writable(false);
+export const sendStore = writable(null);
+export const connectedStore = writable(false);
 
 export const registerStore = writable(null);
 export const stepStore = writable(null, () => {
     const socket = new WebSocket("ws://localhost:9001");
 
     socket.addEventListener("open", () => {
-        connected.set(true);
+        connectedStore.set(true);
+        sendStore.subscribe((msg) => { if (msg !== null) { socket.send(msg) } });
     });
 
     socket.addEventListener("message", (event) => {
@@ -21,7 +22,6 @@ export const stepStore = writable(null, () => {
         }
     });
 
-    sendStore.subscribe((msg) => { /*socket.send(msg)*/ });
 
-    return () => { connected.set(false); socket.close() }
+    return () => { console.log("CLOSING!"); connectedStore.set(false); socket.close() }
 });
