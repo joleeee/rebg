@@ -1,6 +1,7 @@
 <script>
     import Step from "./Step.svelte";
     import { stepStore, sendStore, connectedStore } from "./ws.js";
+    import { selectedAddress, selectedIdx } from "./stores";
 
     export let steps = [
         [0, 0, "0x0000005500806280", "sub sp, sp, x0"],
@@ -168,7 +169,35 @@
     function step_selected(step) {
         selected_idx = step.detail.index;
     }
+
+    function key_press(event) {
+        const prev = selected_idx;
+        switch (event.key) {
+            case "j":
+                // this is important, js lmao (0 """is""" false)
+                if (selected_idx !== null) {
+                    selected_idx = Math.min(selected_idx + 1, steps.length);
+                }
+                break;
+            case "k":
+                if (selected_idx !== null) {
+                    selected_idx = Math.max(selected_idx - 1, 0);
+                }
+                break;
+        }
+        if (prev != selected_idx) {
+            let step = steps[selected_idx];
+            if (step[1] != selected_idx) {
+                console.log("SHIT");
+            }
+            // hacky af
+            selectedIdx.set(selected_idx);
+            selectedAddress.set(step[2]);
+        }
+    }
 </script>
+
+<svelte:window on:keypress={key_press} />
 
 <div class="outer">
     {#each steps as step}
