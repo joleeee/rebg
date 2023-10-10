@@ -28,12 +28,12 @@
 
   .stepline {
     background-color: white;
-    flex: 1;
   }
 
   .regs {
     color: white;
     background-color: green;
     min-width: 12em;
+    flex: 1;
   }
 </style>
