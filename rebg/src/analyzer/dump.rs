@@ -216,8 +216,12 @@ impl Analyzer for TraceDumper {
 
                     let msg = match msg {
                         tungstenite::Message::Text(text) => text,
+                        tungstenite::Message::Ping(_p) => {
+                            ws.send(tungstenite::Message::Pong(_p)).unwrap();
+                            continue;
+                        }
                         tungstenite::Message::Close(_c) => {
-                            // println!("Closing: {:?}", c);
+                            println!("Closing: {:?}", _c);
                             break;
                         }
                         _ => continue,
