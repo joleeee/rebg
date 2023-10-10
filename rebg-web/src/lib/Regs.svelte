@@ -21,10 +21,8 @@
         if (registers === null) {
             return;
         }
-        let index = registers.idx;
         let rs = registers.registers;
         regs = rs;
-        console.log(rs);
     }
 </script>
 
