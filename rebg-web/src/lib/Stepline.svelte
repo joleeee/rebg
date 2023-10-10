@@ -1,6 +1,6 @@
 <script>
-    import { onMount } from "svelte";
     import Step from "./Step.svelte";
+    import { stepStore, registerStore, sendStore, connected } from "./ws.js";
 
     export let steps = [
         [0, 0, "0x0000005500806280", "sub sp, sp, x0"],
@@ -140,24 +140,19 @@
         [3, 134, "0x0000005500806418", "ldp x19, x20, [sp, #0x10]"],
     ];
 
-    let socket;
-    onMount(() => {
-        socket = new WebSocket("ws://localhost:9001");
-        socket.addEventListener("open", () => {
-            steps = [];
-        });
-        socket.addEventListener("message", (event) => {
-            let msgs = JSON.parse(event.data);
-            if (msgs.hasOwnProperty("steps")) {
-                recv_steps(msgs.steps);
-            }
-            if (msgs.hasOwnProperty("registers")) {
-                recv_registers(msgs.registers);
-            }
-        });
+    connected.subscribe((isConnected) => {
+        if (!isConnected) {
+            return;
+        }
+        steps = [];
     });
+    stepStore.subscribe(recv_steps);
+    registerStore.subscribe(recv_registers);
 
     function recv_steps(msgs) {
+        if (msgs === null) {
+            return;
+        }
         msgs.forEach((step) => {
             let new_step = [step.d, step.i, step.a, step.c];
             steps = [...steps, new_step];
@@ -165,16 +160,16 @@
     }
 
     function recv_registers(registers) {
+        if (registers === null) {
+            return;
+        }
         let index = registers.idx;
         let regs = registers.registers;
         console.log(index, regs);
     }
 
     function step_selected(step) {
-        if (!socket) {
-            return;
-        }
-        if (socket.CONNECTING) {
+        if (!connected) {
             return;
         }
         step = step.detail;
@@ -182,7 +177,7 @@
         let selected_idx = step.index;
 
         // ask backend for registers at this point
-        socket.send(JSON.stringify({ registers: selected_idx }));
+        sendStore.set(JSON.stringify({ registers: selected_idx }));
     }
 </script>
 
