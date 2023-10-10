@@ -34,5 +34,6 @@
   .regs {
     color: white;
     background-color: green;
+    min-width: 12em;
   }
 </style>

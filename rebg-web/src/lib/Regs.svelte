@@ -1,11 +1,19 @@
 <script>
     import Reg from "./Reg.svelte";
-    import { registerStore, stepStore } from "./ws";
+    import { registerStore, connectedStore } from "./ws";
 
     export let regs = [
         ["rax", 1234],
         ["rsp", 133713371337],
     ];
+
+    let connected = false;
+    connectedStore.subscribe((x) => {
+        connected = x;
+        if (connected) {
+            regs = [];
+        }
+    });
 
     registerStore.subscribe(recv_registers);
 
@@ -14,8 +22,9 @@
             return;
         }
         let index = registers.idx;
-        let regs = registers.registers;
-        console.log(index, regs);
+        let rs = registers.registers;
+        regs = rs;
+        console.log(rs);
     }
 </script>
 
