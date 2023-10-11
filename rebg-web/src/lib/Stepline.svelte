@@ -171,19 +171,46 @@
     }
 
     function key_press(event) {
+        // this is important, js lmao (0 """is""" false)
+        if (selected_idx === null) {
+            return;
+        }
+
         const prev = selected_idx;
         switch (event.key) {
             case "j":
-                // this is important, js lmao (0 """is""" false)
-                if (selected_idx !== null) {
-                    selected_idx = Math.min(selected_idx + 1, steps.length - 1);
-                }
+                selected_idx = Math.min(selected_idx + 1, steps.length - 1);
                 break;
             case "k":
-                if (selected_idx !== null) {
-                    selected_idx = Math.max(selected_idx - 1, 0);
-                }
+                selected_idx = Math.max(selected_idx - 1, 0);
                 break;
+            case "h": {
+                // @ts-ignore
+                let target_depth = steps[selected_idx][0] - 1;
+                let cur_idx = selected_idx;
+                // @ts-ignore
+                while (cur_idx > 0 && steps[cur_idx][0] > target_depth) {
+                    cur_idx -= 1;
+                }
+                selected_idx = cur_idx;
+                break;
+            }
+            case "l": {
+                // @ts-ignore
+                let target_depth = steps[selected_idx][0] + 1;
+                // @ts-ignore
+                let cur_idx = selected_idx;
+                while (
+                    cur_idx < steps.length - 1 &&
+                    steps[cur_idx][0] == target_depth - 1 &&
+                    steps[cur_idx + 1][0] >= steps[cur_idx][0]
+                ) {
+                    cur_idx += 1;
+                }
+
+                selected_idx = cur_idx;
+                break;
+            }
         }
         if (prev != selected_idx) {
             let step = steps[selected_idx];
