@@ -213,7 +213,7 @@
                 let cur_idx = selected_idx;
                 let target_depth = steps[selected_idx][0];
                 cur_idx = Math.max(cur_idx - 1, 0);
-                while (cur_idx > 0 && steps[cur_idx][0] < target_depth) {
+                while (cur_idx > 0 && steps[cur_idx][0] > target_depth) {
                     cur_idx -= 1;
                 }
                 selected_idx = cur_idx;
