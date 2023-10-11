@@ -4,6 +4,8 @@
     const dispatch = createEventDispatcher();
     const addressSelected = "#ff000060";
     const idxSelected = "#ff0000c0";
+    /** @type { Element } */
+    let thisStep;
 
     export let depth, idx, adr, asm;
     $: indent = "\u00A0".repeat(depth); // nbsp
@@ -22,11 +24,16 @@
     selectedIdx.subscribe((x) => (selectedI = x));
     $: highlightAdr = selectedA == address;
     $: highlightIdx = selectedI == idx;
+
+    // if it's in view, scroll to it (nice for keybinds!)
+    $: if (highlightIdx) {
+        thisStep.scrollIntoView({ block: "nearest" });
+    }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
-<div on:click={click}>
+<div on:click={click} bind:this={thisStep}>
     <span
         class="idx"
         style={highlightIdx ? `background-color: ${idxSelected};` : ""}
