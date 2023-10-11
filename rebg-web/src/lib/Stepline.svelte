@@ -184,6 +184,31 @@
             case "k":
                 selected_idx = Math.max(selected_idx - 1, 0);
                 break;
+            case "J": {
+                let cur_idx = selected_idx;
+                let target_depth = steps[selected_idx][0];
+                // first just go down one
+                cur_idx = Math.min(cur_idx + 1, steps.length - 1);
+                // but then, continue if we're not at the same level
+                while (
+                    cur_idx < steps.length - 1 &&
+                    steps[cur_idx][0] > target_depth
+                ) {
+                    cur_idx += 1;
+                }
+                selected_idx = cur_idx;
+                break;
+            }
+            case "K": {
+                let cur_idx = selected_idx;
+                let target_depth = steps[selected_idx][0];
+                cur_idx = Math.max(cur_idx - 1, 0);
+                while (cur_idx > 0 && steps[cur_idx][0] < target_depth) {
+                    cur_idx -= 1;
+                }
+                selected_idx = cur_idx;
+                break;
+            }
             case "h": {
                 // @ts-ignore
                 let target_depth = steps[selected_idx][0] - 1;
