@@ -170,14 +170,24 @@
         selected_idx = step.detail.index;
     }
 
+    let last_key = null;
     function key_press(event) {
+        if (event.key === "Enter" && last_key !== null) {
+            handle_action(last_key);
+        } else {
+            handle_action(event.key);
+            last_key = event.key;
+        }
+    }
+
+    function handle_action(action) {
         // this is important, js lmao (0 """is""" false)
         if (selected_idx === null) {
             return;
         }
 
         const prev = selected_idx;
-        switch (event.key) {
+        switch (action) {
             case "j":
                 selected_idx = Math.min(selected_idx + 1, steps.length - 1);
                 break;
