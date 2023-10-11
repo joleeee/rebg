@@ -38,6 +38,10 @@ Recording all state allows to introduce some bindings which look like things you
 - `l`: step to the next call
     - if there is no next call, step to ret
 
+## note to self
+this feels so fucking great to step this way, i think just showing this shows
+how great debugging using this could be
+
 # Setup
 Most is not documented, if you find anything that's not obvious, please just
 send me an email or open an issue!
