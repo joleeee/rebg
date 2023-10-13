@@ -15,10 +15,10 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::json;
 use std::net::TcpListener;
+use std::rc::Rc;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    rc::Rc,
 };
 use tungstenite::accept;
 
@@ -40,7 +40,7 @@ impl Analyzer for TraceDumper {
         TRACER: crate::tracer::Tracer<STEP, N, ITER = ITER>,
         ITER: Iterator<Item = ParsedStep<STEP, N>>,
     {
-        let cs = arch.make_capstone().unwrap();
+        let cs = Rc::new(arch.make_capstone().unwrap());
 
         let offsets = match iter.next().unwrap() {
             ParsedStep::LibLoad(x) => x,
@@ -97,7 +97,7 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table.clone());
+        let mut analyzer = RealAnalyzer::new(cs, arch, table.clone());
 
         // we want changes to instantly show up in the UI, but we are also
         // dependent on the next step for some analysis, so we need to first
@@ -118,6 +118,7 @@ impl Analyzer for TraceDumper {
                 Some(Instrumentation {
                     branch: Some(prev_branch),
                     disassembly: _,
+                    access: _,
                 }) => match prev_branch {
                     Branching::Call(target, return_address) => {
                         // 1. if we are at target, it's a normal call
@@ -205,7 +206,7 @@ impl Analyzer for TraceDumper {
                 let iter = trace
                     .iter()
                     .enumerate()
-                    .zip(instrumentations.into_iter())
+                    .zip(instrumentations.iter())
                     .zip(bt_lens.into_iter());
                 // .filter(|(((_, tr), _), _)| tr.state().pc() < 0x5500000000);
 
@@ -636,6 +637,7 @@ where
 
         let instrum = step.instrument();
         let branch = instrum.recover_branch(&self.cs, insn, &detail);
+        let access = instrum.regs_access(&self.cs, insn);
 
         // only print memory changes if we're in the user binary
         for MemoryOp {
@@ -657,6 +659,7 @@ where
         Instrumentation {
             branch,
             disassembly: op,
+            access,
         }
     }
 }
