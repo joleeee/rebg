@@ -156,7 +156,7 @@
             return;
         }
         msgs.forEach((step) => {
-            let new_step = [step.d, step.i, step.a, step.c];
+            let new_step = [step.d, step.i, step.a, step.c, step.s];
             steps = [...steps, new_step];
         });
     }
@@ -275,6 +275,7 @@
             idx={step[1]}
             adr={step[2]}
             asm={step[3]}
+            symbol={step[4]}
         />
     {/each}
 </div>

@@ -97,7 +97,7 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table);
+        let mut analyzer = RealAnalyzer::new(Rc::new(cs), arch, table.clone());
 
         // we want changes to instantly show up in the UI, but we are also
         // dependent on the next step for some analysis, so we need to first
@@ -187,6 +187,7 @@ impl Analyzer for TraceDumper {
             let trace = trace.clone();
             let instrumentations = instrumentations.clone();
             let bt_lens = bt_lens.clone();
+            let table = table.clone();
             std::thread::spawn(move || {
                 // first send all addresses etc
                 let mut ws = accept(stream.unwrap()).unwrap();
@@ -204,7 +205,12 @@ impl Analyzer for TraceDumper {
                     let mut parts = Vec::new();
 
                     for (((i, step), instru), bt_len) in chunk {
-                        parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len}));
+                        let symbolized = if let Some(s) = table.lookup(step.state().pc()) {
+                            format!("{}", s)
+                        } else {
+                            "".to_string()
+                        };
+                        parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len, "s": symbolized}));
                     }
 
                     let json = serde_json::to_string(&json!({"steps": parts})).unwrap();

@@ -7,22 +7,22 @@
     /** @type { Element } */
     let thisStep;
 
-    export let depth, idx, adr, asm;
-    $: indent = "\u00A0".repeat(depth); // nbsp
-    $: index = parseInt(idx).toString().padStart(4, "\u00A0");
-    $: address = "0x" + parseInt(adr).toString(16);
+    export let depth, idx, adr, asm, symbol;
+    $: Indent = "\u00A0".repeat(depth); // nbsp
+    $: Index = parseInt(idx).toString().padStart(4, "\u00A0");
+    $: Address = symbol || "0x" + parseInt(adr).toString(16);
 
     function click() {
         dispatch("selected", { index: idx, address: adr });
-        selectedAddress.set(address);
-        selectedIdx.set(index);
+        selectedAddress.set(Address);
+        selectedIdx.set(Index);
     }
 
     let selectedA = null;
     let selectedI = null;
     selectedAddress.subscribe((x) => (selectedA = x));
     selectedIdx.subscribe((x) => (selectedI = x));
-    $: highlightAdr = selectedA == address;
+    $: highlightAdr = selectedA == Address;
     $: highlightIdx = selectedI == idx;
 
     // if it's in view, scroll to it (nice for keybinds!)
@@ -37,12 +37,12 @@
     <span
         class="idx"
         style={highlightIdx ? `background-color: ${idxSelected};` : ""}
-        >{indent}{index}</span
+        >{Indent}{Index}</span
     >
     <span
         class="adr"
         style={highlightAdr ? `background-color: ${addressSelected};` : ""}
-        >{address}</span
+        >{Address}</span
     >
     <span>{asm}</span>
 </div>
