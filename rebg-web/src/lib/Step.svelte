@@ -14,15 +14,15 @@
 
     function click() {
         dispatch("selected", { index: idx, address: adr });
-        selectedAddress.set(Address);
-        selectedIdx.set(Index);
+        selectedAddress.set(adr);
+        selectedIdx.set(idx);
     }
 
     let selectedA = null;
     let selectedI = null;
     selectedAddress.subscribe((x) => (selectedA = x));
     selectedIdx.subscribe((x) => (selectedI = x));
-    $: highlightAdr = selectedA == Address;
+    $: highlightAdr = selectedA == adr;
     $: highlightIdx = selectedI == idx;
 
     // if it's in view, scroll to it (nice for keybinds!)
