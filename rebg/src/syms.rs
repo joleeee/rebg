@@ -125,7 +125,7 @@ impl SymbolTable {
     }
 
     pub fn from_elf(elf: &goblin::elf::Elf) -> Self {
-        let offsets = Self::get_offsets(&elf);
+        let offsets = Self::get_offsets(elf);
 
         let empty = Self {
             offsets,
@@ -133,9 +133,9 @@ impl SymbolTable {
             fallback: None,
         };
 
-        let filled = empty.extend_with_debug(elf, u64::MIN, u64::MAX);
+        
 
-        filled
+        empty.extend_with_debug(elf, u64::MIN, u64::MAX)
     }
 
     /// offset based on where the binary is loaded

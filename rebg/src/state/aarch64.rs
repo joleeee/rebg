@@ -201,7 +201,7 @@ impl Instrument for Aarch64Instrument {
 
                     // hacky af
                     let reg_nr = operand_str
-                        .strip_prefix("x")
+                        .strip_prefix('x')
                         .unwrap()
                         .parse::<u32>()
                         .unwrap();

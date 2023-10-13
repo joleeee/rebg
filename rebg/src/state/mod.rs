@@ -84,7 +84,7 @@ impl MemoryValue {
             MemoryValue::Byte(b) => *b as u64,
             MemoryValue::Word(w) => *w as u64,
             MemoryValue::Dword(d) => *d as u64,
-            MemoryValue::Qword(q) => *q as u64,
+            MemoryValue::Qword(q) => *q,
         }
     }
 }

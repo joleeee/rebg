@@ -111,7 +111,7 @@ impl Analyzer for TraceDumper {
         for cur_step in &trace {
             let instrumentation = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
-            let prev_instrumentation = instrumentations.iter().rev().skip(1).next();
+            let prev_instrumentation = instrumentations.iter().rev().nth(1);
 
             // do for the PREVIOUS branch
             match prev_instrumentation {
@@ -275,7 +275,7 @@ impl Analyzer for TraceDumper {
                                 .collect();
 
                             let pairs = regs.iter().enumerate().map(|(idx, (value, modifier))| {
-                                let name = <STEP as state::Step<N>>::STATE::reg_name(idx as usize);
+                                let name = <STEP as state::Step<N>>::STATE::reg_name(idx);
                                 (name, value, modifier)
                             });
                             let pairs: Vec<_> = pairs.collect();
@@ -297,10 +297,10 @@ impl Analyzer for TraceDumper {
 fn decompose_syscall(strace: &str) -> Option<(String, Vec<String>, String)> {
     lazy_static! {
         // kinda low effort, will fail if there is a string argument with a comma
-        static ref RE: Regex = Regex::new(r#"(\w+)\(([^)]*)\) = (\w+)"#).unwrap();
+        static ref RE: Regex = Regex::new(r"(\w+)\(([^)]*)\) = (\w+)").unwrap();
     }
 
-    let captures = RE.captures(&strace);
+    let captures = RE.captures(strace);
 
     let captures = captures.map(|c| {
         c.iter()
@@ -315,7 +315,7 @@ fn decompose_syscall(strace: &str) -> Option<(String, Vec<String>, String)> {
     let name = captures.next().expect("no name");
 
     let arguments = captures.next().expect("no arguments group");
-    let arguments = arguments.split(",").map(|x| x.to_string()).collect();
+    let arguments = arguments.split(',').map(|x| x.to_string()).collect();
 
     let ret = captures.next().expect("no return value").to_string();
 
@@ -446,7 +446,7 @@ impl SyscallState {
     }
 }
 
-fn find_debug_elf<'a, LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
+fn find_debug_elf<LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
 where
     LAUNCHER: Host,
     <LAUNCHER as Host>::Error: std::fmt::Debug,
@@ -549,7 +549,7 @@ where
         let disasm = self.cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
         let insn = &disasm[0];
-        let op = inst_to_str(&insn, Some(&self.syms));
+        let op = inst_to_str(insn, Some(&self.syms));
 
         let detail = self.cs.insn_detail(insn).expect("no detail");
 
@@ -635,7 +635,7 @@ where
         }
 
         let instrum = step.instrument();
-        let branch = instrum.recover_branch(&self.cs, &insn, &detail);
+        let branch = instrum.recover_branch(&self.cs, insn, &detail);
 
         // only print memory changes if we're in the user binary
         for MemoryOp {
