@@ -1,7 +1,7 @@
 <script>
     import Step from "./Step.svelte";
     import { stepStore, sendStore, connectedStore } from "./ws.js";
-    import { selectedAddress, selectedIdx } from "./stores";
+    import { selectedAddress, selectedIdx, showSymbols } from "./stores";
 
     export let steps = [
         [0, 0, "0x0000005500806280", "sub sp, sp, x0"],
@@ -172,6 +172,7 @@
 
     let last_key = null;
     function key_press(event) {
+        event.preventDefault();
         if (event.key === "Enter" && last_key !== null) {
             handle_action(last_key);
         } else {
@@ -188,6 +189,9 @@
 
         const prev = selected_idx;
         switch (action) {
+            case " ":
+                showSymbols.update((x) => !x);
+                break;
             case "g":
                 selected_idx = 0;
                 break;

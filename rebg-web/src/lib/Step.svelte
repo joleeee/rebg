@@ -1,16 +1,19 @@
 <script>
     import { createEventDispatcher } from "svelte";
-    import { selectedAddress, selectedIdx } from "./stores.js";
+    import { selectedAddress, selectedIdx, showSymbols } from "./stores.js";
     const dispatch = createEventDispatcher();
     const addressSelected = "#ff000060";
     const idxSelected = "#ff0000c0";
     /** @type { Element } */
     let thisStep;
 
+    let show;
+    showSymbols.subscribe((x) => (show = x));
+
     export let depth, idx, adr, asm, symbol;
     $: Indent = "\u00A0".repeat(depth); // nbsp
     $: Index = parseInt(idx).toString().padStart(4, "\u00A0");
-    $: Address = symbol || "0x" + parseInt(adr).toString(16);
+    $: Address = (show && symbol) || "0x" + parseInt(adr).toString(16);
 
     function click() {
         dispatch("selected", { index: idx, address: adr });
