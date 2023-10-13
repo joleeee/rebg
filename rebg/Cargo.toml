@@ -12,7 +12,7 @@ anyhow = "1.0.71"
 argh = "0.1.10"
 bitflags = "2.3.1"
 bollard = "0.15.0"
-capstone = "0.11.0"
+capstone = { git = "https://github.com/joleeee/capstone-rs.git", rev = "47c31fae93ef752b445517e3eaf9ec203c742761" }
 flume = "0.10.14"
 futures = "0.3.28"
 goblin = "0.6.1"
