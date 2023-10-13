@@ -236,11 +236,30 @@ impl Analyzer for TraceDumper {
                     let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
                     match msg {
                         RebgRequest::Registers(idx) => {
-                            let step = trace.get(idx as usize).unwrap();
-                            let regs = step.state().regs();
-                            let pairs = regs.iter().enumerate().map(|(idx, value)| {
+                            let cur_regs = {
+                                let step = trace.get(idx as usize).unwrap();
+                                step.state().regs()
+                            };
+                            let prev_regs = {
+                                if idx > 0 {
+                                    let step = trace.get((idx - 1) as usize).unwrap();
+                                    Some(step.state().regs())
+                                } else {
+                                    None
+                                }
+                            };
+
+                            let prev_regs = prev_regs.unwrap_or(cur_regs);
+
+                            let regs: Vec<_> = cur_regs
+                                .iter()
+                                .zip(prev_regs)
+                                .map(|(cur, prev)| (cur, if cur == prev { "" } else { "w" }))
+                                .collect();
+
+                            let pairs = regs.iter().enumerate().map(|(idx, (value, modifier))| {
                                 let name = <STEP as state::Step<N>>::STATE::reg_name(idx as usize);
-                                (name, value)
+                                (name, value, modifier)
                             });
                             let pairs: Vec<_> = pairs.collect();
 

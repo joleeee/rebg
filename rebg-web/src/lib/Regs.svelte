@@ -28,7 +28,7 @@
 
 <div class="outer">
     {#each regs as r}
-        <Reg name={r[0]} value={r[1]} />
+        <Reg name={r[0]} value={r[1]} mod={r[2]}/>
     {/each}
 </div>
 
