@@ -1,20 +1,26 @@
 use super::Analyzer;
+use crate::state::{self, Branching, Instrument};
 use crate::{
     arch::Arch,
     host::Host,
     rstate,
-    state::{MemoryOp, MemoryOpKind, State, Step},
+    state::{Instrumentation, MemoryOp, MemoryOpKind, State, Step},
     syms::SymbolTable,
     tracer::ParsedStep,
 };
 use capstone::Capstone;
 use goblin::elf::Elf;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde_json::json;
+use std::net::TcpListener;
+use std::rc::Rc;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+use tungstenite::accept;
 
 /// Dumps the log
 pub struct TraceDumper {}
@@ -34,7 +40,7 @@ impl Analyzer for TraceDumper {
         TRACER: crate::tracer::Tracer<STEP, N, ITER = ITER>,
         ITER: Iterator<Item = ParsedStep<STEP, N>>,
     {
-        let cs = arch.make_capstone().unwrap();
+        let cs = Rc::new(arch.make_capstone().unwrap());
 
         let offsets = match iter.next().unwrap() {
             ParsedStep::LibLoad(x) => x,
@@ -56,7 +62,7 @@ impl Analyzer for TraceDumper {
             let elf = goblin::elf::Elf::parse(&contents).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let table = SymbolTable::from_elf(&elf).add_offset(pie.0);
+            let table = SymbolTable::from_elf(path.clone(), &elf).add_offset(pie.0);
 
             // TODO also add debug symbols if they are missing from the binary itself
 
@@ -65,7 +71,7 @@ impl Analyzer for TraceDumper {
         // merge into a single table
         let table = symbol_tables
             .into_iter()
-            .reduce(|accum, item| accum.join(item))
+            .reduce(|accum, item| accum.push_table(item))
             .unwrap();
 
         let mut trace = Vec::new();
@@ -91,7 +97,88 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        print_trace(&trace, launcher, &cs, Some(table.clone()), arch);
+        let mut analyzer = RealAnalyzer::new(cs, arch, table.clone());
+
+        // we want changes to instantly show up in the UI, but we are also
+        // dependent on the next step for some analysis, so we need to first
+        // send the raw step, then later send the analyzed step
+
+        let mut instrumentations = Vec::new();
+
+        let mut bt = Vec::new();
+        let mut bt_lens = Vec::new();
+
+        for cur_step in &trace {
+            let instrumentation = analyzer.step(launcher, cur_step);
+            instrumentations.push(instrumentation);
+            let prev_instrumentation = instrumentations.iter().rev().nth(1);
+
+            // do for the PREVIOUS branch
+            match prev_instrumentation {
+                Some(Instrumentation {
+                    branch: Some(prev_branch),
+                    disassembly: _,
+                    access: _,
+                }) => match prev_branch {
+                    Branching::Call(target, return_address) => {
+                        // 1. if we are at target, it's a normal call
+
+                        // 2. if we are at the next address, it means nothing of it was traced
+
+                        // 3. otherwise, i think it's our code -> invisible code -> our code
+                        // so we should still do depth += 1 (or actually more?)
+
+                        let is_invisible = cur_step.state().pc() == *return_address;
+                        if is_invisible {
+                            println!(">>> INVISIBLE");
+                        } else {
+                            bt.push(*return_address);
+
+                            let sym_txt = {
+                                let sym = analyzer.syms.lookup(*target);
+                                if let Some(sym) = sym {
+                                    format!(" = <{}>", sym)
+                                } else {
+                                    String::new()
+                                }
+                            };
+                            println!(">>> {:3} Calling {:x}{}", bt.len(), target, sym_txt);
+                        }
+                    }
+                    Branching::Return => {
+                        // find where in the backtrace we are
+                        let idx = bt.iter().position(|v| *v == cur_step.state().pc());
+
+                        if let Some(idx) = idx {
+                            let removed: Vec<_> = bt.drain(idx..).collect();
+                            println!(
+                                ">>> {:3} RETURN: removing {} elements",
+                                bt.len(),
+                                removed.len()
+                            );
+                        } else {
+                            println!(">>> WARNING RETURN: could not find in backtrace!");
+                        }
+                    }
+                },
+                _ => {
+                    // even if WERE not at a return, we might HAVE actually returned
+                    // because the return was not visible due to qemu shit
+
+                    let idx = bt.iter().position(|v| *v == cur_step.state().pc());
+
+                    if let Some(idx) = idx {
+                        // TODO also make sure sp changed, as a measure to reduce false positives
+                        drop(bt.drain(idx..));
+                    }
+                }
+            }
+
+            bt_lens.push(bt.len());
+        }
+
+        // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
+        assert_eq!(instrumentations.last().and_then(|x| x.branch.clone()), None);
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);
@@ -102,16 +189,119 @@ impl Analyzer for TraceDumper {
         if !result.stderr.is_empty() {
             println!("stderr:\n{}", String::from_utf8(result.stderr).unwrap());
         }
+
+        assert_eq!(trace.len(), instrumentations.len());
+        assert_eq!(trace.len(), bt_lens.len());
+
+        let server = TcpListener::bind("127.0.0.1:9001").unwrap();
+        for stream in server.incoming() {
+            let trace = trace.clone();
+            let instrumentations = instrumentations.clone();
+            let bt_lens = bt_lens.clone();
+            let table = table.clone();
+            std::thread::spawn(move || {
+                // first send all addresses etc
+                let mut ws = accept(stream.unwrap()).unwrap();
+
+                let iter = trace
+                    .iter()
+                    .enumerate()
+                    .zip(instrumentations.iter())
+                    .zip(bt_lens.into_iter());
+                // .filter(|(((_, tr), _), _)| tr.state().pc() < 0x5500000000);
+
+                let chunked = iter.chunks(100);
+
+                for chunk in &chunked {
+                    let mut parts = Vec::new();
+
+                    for (((i, step), instru), bt_len) in chunk {
+                        let symbolized = if let Some(s) = table.lookup(step.state().pc()) {
+                            format!("{}", s)
+                        } else {
+                            "".to_string()
+                        };
+                        parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len, "s": symbolized}));
+                    }
+
+                    let json = serde_json::to_string(&json!({"steps": parts})).unwrap();
+                    ws.send(tungstenite::Message::Text(json)).unwrap();
+                }
+
+                // then send register values on request
+                loop {
+                    let msg = ws.read().unwrap();
+
+                    let msg = match msg {
+                        tungstenite::Message::Text(text) => text,
+                        tungstenite::Message::Ping(_p) => {
+                            ws.send(tungstenite::Message::Pong(_p)).unwrap();
+                            continue;
+                        }
+                        tungstenite::Message::Close(_c) => {
+                            println!("Closing: {:?}", _c);
+                            break;
+                        }
+                        _ => continue,
+                    };
+
+                    #[derive(serde::Deserialize, serde::Serialize)]
+                    #[serde(rename_all = "snake_case")]
+                    enum RebgRequest {
+                        Registers(u64),
+                    }
+
+                    let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
+                    match msg {
+                        RebgRequest::Registers(idx) => {
+                            let cur_regs = {
+                                let step = trace.get(idx as usize).unwrap();
+                                step.state().regs()
+                            };
+                            let prev_regs = {
+                                if idx > 0 {
+                                    let step = trace.get((idx - 1) as usize).unwrap();
+                                    Some(step.state().regs())
+                                } else {
+                                    None
+                                }
+                            };
+
+                            let prev_regs = prev_regs.unwrap_or(cur_regs);
+
+                            let regs: Vec<_> = cur_regs
+                                .iter()
+                                .zip(prev_regs)
+                                .map(|(cur, prev)| (cur, if cur == prev { "" } else { "w" }))
+                                .collect();
+
+                            let pairs = regs.iter().enumerate().map(|(idx, (value, modifier))| {
+                                let name = <STEP as state::Step<N>>::STATE::reg_name(idx);
+                                (name, value, modifier)
+                            });
+                            let pairs: Vec<_> = pairs.collect();
+
+                            let serialized = serde_json::to_string(
+                                &json!({"registers": {"idx": idx, "registers": pairs}}),
+                            )
+                            .unwrap();
+
+                            ws.send(tungstenite::Message::Text(serialized)).unwrap();
+                        }
+                    }
+                }
+            });
+        }
     }
 }
 
 fn decompose_syscall(strace: &str) -> Option<(String, Vec<String>, String)> {
     lazy_static! {
         // kinda low effort, will fail if there is a string argument with a comma
-        static ref RE: Regex = Regex::new(r#"(\w+)\(([^)]*)\) = (\w+)"#).unwrap();
+        static ref RE: Regex = Regex::new(r"(\w+)\(([^)]*)\) = (\w+)").unwrap();
     }
 
-    let captures = RE.captures(&strace);
+    let captures = RE.captures(strace);
 
     let captures = captures.map(|c| {
         c.iter()
@@ -126,7 +316,7 @@ fn decompose_syscall(strace: &str) -> Option<(String, Vec<String>, String)> {
     let name = captures.next().expect("no name");
 
     let arguments = captures.next().expect("no arguments group");
-    let arguments = arguments.split(",").map(|x| x.to_string()).collect();
+    let arguments = arguments.split(',').map(|x| x.to_string()).collect();
 
     let ret = captures.next().expect("no return value").to_string();
 
@@ -158,8 +348,11 @@ enum StateUpdate {
         offset: u64,
         size: u64,
     },
+    // todo, actually use this
     Munmap {
+        #[allow(dead_code)]
         addr: u64,
+        #[allow(dead_code)]
         size: u64,
     },
 }
@@ -254,7 +447,7 @@ impl SyscallState {
     }
 }
 
-fn find_debug_elf<'a, LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
+fn find_debug_elf<LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
 where
     LAUNCHER: Host,
     <LAUNCHER as Host>::Error: std::fmt::Debug,
@@ -313,27 +506,40 @@ where
     None
 }
 
-fn print_trace<STEP, LAUNCHER, const N: usize>(
-    trace: &[STEP],
-    launcher: &LAUNCHER,
-    cs: &Capstone,
-    mut syms: Option<SymbolTable>,
-    arch: Arch,
-) where
-    <STEP as Step<N>>::STATE: State<N>,
+struct RealAnalyzer<STEP, const N: usize>
+where
     STEP: Step<N>,
-    LAUNCHER: Host,
-    <LAUNCHER as Host>::Error: std::fmt::Debug,
 {
-    let mut previous_state: Option<STEP::STATE> = None;
+    hist: Vec<STEP::STATE>,
+    cs: Rc<Capstone>,
+    syms: SymbolTable,
+    arch: Arch,
+    syscall_state: SyscallState,
+}
 
-    let mut syscall_state = SyscallState::new();
+impl<STEP, const N: usize> RealAnalyzer<STEP, N>
+where
+    STEP: Step<N>,
+{
+    fn new(cs: Rc<Capstone>, arch: Arch, syms: SymbolTable) -> Self {
+        Self {
+            hist: Vec::new(),
+            cs,
+            syms,
+            arch,
+            syscall_state: SyscallState::new(),
+        }
+    }
 
-    for step in trace {
-        if let Some(previous) = previous_state {
+    fn step<LAUNCHER>(&mut self, launcher: &LAUNCHER, step: &STEP) -> Instrumentation
+    where
+        LAUNCHER: Host,
+        <LAUNCHER as Host>::Error: std::fmt::Debug,
+    {
+        if let Some(previous) = self.hist.last() {
             let current = step.state();
 
-            let diff = rstate::diff(&previous, current);
+            let diff = rstate::diff(previous, current);
             diff.print::<STEP::STATE>();
             println!();
         }
@@ -341,11 +547,14 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
         let address = step.address();
         let code = step.code();
 
-        let disasm = cs.disasm_all(code, address).unwrap();
+        let disasm = self.cs.disasm_all(code, address).unwrap();
         assert_eq!(disasm.len(), 1);
-        let op = inst_to_str(disasm.first().unwrap(), syms.as_ref());
+        let insn = &disasm[0];
+        let op = inst_to_str(insn, Some(&self.syms));
 
-        let symbol = syms.as_ref().and_then(|s| s.lookup(address));
+        let detail = self.cs.insn_detail(insn).expect("no detail");
+
+        let symbol = self.syms.lookup(address);
 
         let location = if let Some(ref symbol) = symbol {
             let symbol = format!("<{}>", symbol);
@@ -362,7 +571,7 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
         if let Some(strace) = step.strace() {
             println!("syscall: {}", strace);
 
-            let update = syscall_state.register(strace);
+            let update = self.syscall_state.register(strace);
             match update {
                 Ok(Some(StateUpdate::Mmap {
                     path,
@@ -370,27 +579,18 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
                     offset,
                     size,
                 })) => {
-                    //if offset != 0 {
-                    //    panic!("offset not implemented. mmap called with {}, for path {}", offset, path);
-                    //}
-
                     let contents = launcher.read_file(Path::new(&path)).unwrap();
-
-                    //if size < contents.len() as u64 {
-                    //    panic!("cutting binary not implemented. binary is {}, but mmap called with {}, for path {}", contents.len(), size, path);
-                    //}
 
                     let elf = Elf::parse(&contents);
 
                     println!("MEMMMM");
 
                     if let Ok(elf) = elf {
-                        let mut new_symbol_table = SymbolTable::from_elf(&elf);
+                        let mut new_symbol_table = SymbolTable::from_elf(path, &elf);
 
                         if elf.syms.is_empty() {
                             eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
 
-                            // .note.gnu.build-id
                             let buildid = elf
                                 .section_headers
                                 .iter()
@@ -406,7 +606,7 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
                                 hex::encode(id)
                             };
 
-                            let bin = find_debug_elf(launcher, &buildid, arch);
+                            let bin = find_debug_elf(launcher, &buildid, self.arch);
                             if let Some(bin) = bin {
                                 let bin = Elf::parse(&bin).ok();
                                 if let Some(bin) = bin {
@@ -422,11 +622,7 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
                         // TODO size
                         new_symbol_table = new_symbol_table.add_offset(addr);
 
-                        syms = if let Some(inner) = syms {
-                            Some(inner.join(new_symbol_table))
-                        } else {
-                            Some(new_symbol_table)
-                        };
+                        self.syms = self.syms.clone().push_table(new_symbol_table);
                     }
                 }
                 Ok(Some(StateUpdate::Munmap { addr: _, size: _ })) => {
@@ -438,6 +634,10 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
                 }
             }
         }
+
+        let instrum = step.instrument();
+        let branch = instrum.recover_branch(&self.cs, insn, &detail);
+        let access = instrum.regs_access(&self.cs, insn);
 
         // only print memory changes if we're in the user binary
         for MemoryOp {
@@ -454,15 +654,14 @@ fn print_trace<STEP, LAUNCHER, const N: usize>(
             println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
         }
 
-        previous_state = Some(step.state().clone());
-    }
+        self.hist.push(step.state().clone());
 
-    let bytes = std::mem::size_of_val(&trace[0]) * trace.len();
-    eprintln!(
-        "Used {}kB of memory for {} steps",
-        bytes / 1024,
-        trace.len()
-    );
+        Instrumentation {
+            branch,
+            disassembly: op,
+            access,
+        }
+    }
 }
 
 fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {

@@ -1,7 +1,21 @@
 use std::str::FromStr;
 
-use super::{GenericState, GenericStep, MemoryOp, State, Step};
+use crate::arch::Arch;
+
+use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use bitflags::bitflags;
+use capstone::{
+    arch::{
+        self,
+        x86::X86Reg::{
+            X86_REG_R10, X86_REG_R11, X86_REG_R12, X86_REG_R13, X86_REG_R14, X86_REG_R15,
+            X86_REG_R8, X86_REG_R9, X86_REG_RAX, X86_REG_RBP, X86_REG_RBX, X86_REG_RCX,
+            X86_REG_RDI, X86_REG_RDX, X86_REG_RIP, X86_REG_RSI, X86_REG_RSP,
+        },
+    },
+    prelude::DetailsArchInsn,
+    RegId,
+};
 
 #[derive(Clone, Debug)]
 pub struct X64Step {
@@ -14,6 +28,10 @@ pub struct X64Step {
 
 impl Step<16> for X64Step {
     type STATE = X64State;
+
+    fn arch(&self) -> Arch {
+        Arch::X86_64
+    }
 
     fn code(&self) -> &[u8] {
         &self.code[..]
@@ -33,6 +51,12 @@ impl Step<16> for X64Step {
 
     fn memory_ops(&self) -> &[super::MemoryOp] {
         &self.memory_ops
+    }
+
+    type INSTRUMENT = X64Instrument;
+
+    fn instrument(&self) -> Self::INSTRUMENT {
+        X64Instrument { step: self.clone() }
     }
 }
 
@@ -86,6 +110,34 @@ impl State<16> for X64State {
     }
 }
 
+impl X64State {
+    // Currently a best effort, only the normal register, only r prefix (ex. no eax)
+    fn read_reg(&self, reg_id: RegId) -> Option<u64> {
+        let idx = match reg_id.0 as u32 {
+            X86_REG_RAX => 0,
+            X86_REG_RBX => 1,
+            X86_REG_RCX => 2,
+            X86_REG_RDX => 3,
+            X86_REG_RBP => 4,
+            X86_REG_RSP => 5,
+            X86_REG_RSI => 6,
+            X86_REG_RDI => 7,
+            X86_REG_R8 => 8,
+            X86_REG_R9 => 9,
+            X86_REG_R10 => 10,
+            X86_REG_R11 => 11,
+            X86_REG_R12 => 12,
+            X86_REG_R13 => 13,
+            X86_REG_R14 => 14,
+            X86_REG_R15 => 15,
+            X86_REG_RIP => return Some(self.pc),
+            _ => return None,
+        };
+
+        Some(self.regs[idx])
+    }
+}
+
 impl FromStr for X64State {
     type Err = anyhow::Error;
 
@@ -113,6 +165,100 @@ impl TryFrom<&[String]> for X64Step {
             strace: generic.strace,
             memory_ops: generic.memory_ops,
         })
+    }
+}
+pub struct X64Instrument {
+    step: X64Step,
+}
+impl Instrument for X64Instrument {
+    fn recover_branch(
+        &self,
+        cs: &capstone::Capstone,
+        insn: &capstone::Insn,
+        detail: &capstone::InsnDetail,
+    ) -> Option<Branching> {
+        let group_names: Vec<_> = detail
+            .groups()
+            .iter()
+            .map(|g| cs.group_name(*g).unwrap())
+            .collect();
+
+        let is_call_insn = { group_names.contains(&"call".to_string()) };
+        let is_ret_insn = { group_names.contains(&"ret".to_string()) };
+
+        assert!(!(is_call_insn && is_ret_insn));
+
+        if is_call_insn {
+            let return_address = insn.address() + insn.len() as u64;
+
+            let operand = {
+                let arch_detail = detail.arch_detail();
+
+                let arch_detail = arch_detail.x86().unwrap();
+                let mut arch_operands = arch_detail.operands();
+
+                assert_eq!(arch_operands.len(), 1);
+                arch_operands.next().unwrap()
+            };
+
+            match operand.op_type {
+                arch::x86::X86OperandType::Reg(reg) => {
+                    let address = match self.step.state().read_reg(reg) {
+                        Some(v) => v,
+                        None => {
+                            eprintln!("Unknown register {:?}", reg);
+                            return None;
+                        }
+                    };
+
+                    Some(Branching::Call(address, return_address))
+                }
+                arch::x86::X86OperandType::Imm(imm) => {
+                    Some(Branching::Call(imm as u64, return_address))
+                }
+                arch::x86::X86OperandType::Mem(mem) => {
+                    assert_eq!(mem.segment().0, 0);
+
+                    let base = match self.step.state().read_reg(mem.base()) {
+                        Some(v) => v,
+                        None => {
+                            if mem.base().0 == 0 {
+                                0
+                            } else {
+                                eprintln!("Unknown base register {:?}", mem.base());
+                                return None;
+                            }
+                        }
+                    } as i128;
+
+                    let index = match self.step.state().read_reg(mem.index()) {
+                        Some(v) => v,
+                        None => {
+                            if mem.index().0 == 0 {
+                                0
+                            } else {
+                                eprintln!("Unknown index register {:?}", mem.index());
+                                return None;
+                            }
+                        }
+                    } as i128;
+
+                    let scale = mem.scale() as i128;
+
+                    let disp = mem.disp() as i128;
+
+                    let target_address = base + index * scale + disp;
+                    let target_address = target_address as u64;
+
+                    Some(Branching::Call(target_address, return_address))
+                }
+                arch::x86::X86OperandType::Invalid => None,
+            }
+        } else if is_ret_insn {
+            Some(Branching::Return)
+        } else {
+            None
+        }
     }
 }
 

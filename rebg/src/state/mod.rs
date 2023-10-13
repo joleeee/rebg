@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use bitflags::Flags;
+use capstone::{Insn, InsnDetail};
 use hex::FromHex;
 use num_traits::Num;
 
@@ -11,9 +12,15 @@ pub use aarch64::{Aarch64Flags, Aarch64State, Aarch64Step};
 pub mod x64;
 pub use x64::{X64Flags, X64State, X64Step};
 
+use crate::arch::Arch;
+
 /// A single step in the trace.
-pub trait Step<const N: usize>: Clone {
+pub trait Step<const N: usize>: Clone + std::marker::Send + 'static {
     type STATE: State<N>;
+    type INSTRUMENT: Instrument;
+    // static architecture
+    fn arch(&self) -> Arch;
+
     fn code(&self) -> &[u8];
     // this also contains the pc
     fn state(&self) -> &Self::STATE;
@@ -21,6 +28,8 @@ pub trait Step<const N: usize>: Clone {
     fn address(&self) -> u64;
     fn strace(&self) -> Option<&String>;
     fn memory_ops(&self) -> &[MemoryOp];
+
+    fn instrument(&self) -> Self::INSTRUMENT;
 }
 
 /// Register values and flags
@@ -30,6 +39,37 @@ pub trait State<const N: usize>: Clone {
     fn regs(&self) -> &[u64; N];
     fn reg_name(i: usize) -> &'static str;
     fn flags(&self) -> &Self::FLAGS;
+}
+
+pub trait Instrument {
+    fn recover_branch(
+        &self,
+        cs: &capstone::Capstone,
+        insn: &Insn,
+        detail: &InsnDetail,
+    ) -> Option<Branching>;
+
+    fn regs_access(&self, cs: &capstone::Capstone, insn: &Insn) -> (Vec<String>, Vec<String>) {
+        let (read, write) = cs.regs_access(insn).unwrap().unwrap();
+        (
+            read.into_iter().map(|r| cs.reg_name(r).unwrap()).collect(),
+            write.into_iter().map(|r| cs.reg_name(r).unwrap()).collect(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Branching {
+    // (to, return to)
+    Call(u64, u64),
+    Return,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub struct Instrumentation {
+    pub branch: Option<Branching>,
+    pub disassembly: String,
+    pub access: (Vec<String>, Vec<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -53,7 +93,7 @@ impl MemoryValue {
             MemoryValue::Byte(b) => *b as u64,
             MemoryValue::Word(w) => *w as u64,
             MemoryValue::Dword(d) => *d as u64,
-            MemoryValue::Qword(q) => *q as u64,
+            MemoryValue::Qword(q) => *q,
         }
     }
 }

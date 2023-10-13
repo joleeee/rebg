@@ -28,7 +28,7 @@ impl Host for Native {
     }
 
     fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error> {
-        let child = Command::new(&program)
+        let child = Command::new(program)
             .args(args)
             .stdin(Stdio::null()) // todo pass through from nc
             .stdout(Stdio::piped()) // same here

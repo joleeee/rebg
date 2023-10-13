@@ -21,6 +21,27 @@ If you're using macos and tracing `linux/amd64`, you can cut runtime by about
 - Web ui
 - Efficently storing memory history.
 
+# UI
+We have a UI now! :D
+
+You can use basic vim bindings: `j/k` for down/up. I'm not sure if we want to
+override the arrow keys, but we'll probably do it eventually.
+
+Recording all state allows to introduce some bindings which look like things you may be familiar with from gdb:
+
+## next / last instruction
+- `Shift-J`: equivalent to gdb `ni`
+- `Shift-K`: the same, but in reverse (time-wise)
+
+## step to next call / parent
+- `h`: step to whatever called this (back in time)
+- `l`: step to the next call
+    - if there is no next call, step to ret
+
+## note to self
+this feels so fucking great to step this way, i think just showing this shows
+how great debugging using this could be
+
 # Setup
 Most is not documented, if you find anything that's not obvious, please just
 send me an email or open an issue!

@@ -1,7 +1,10 @@
 use std::str::FromStr;
 
-use super::{GenericState, GenericStep, State, Step};
+use crate::arch::Arch;
+
+use super::{Branching, GenericState, GenericStep, Instrument, State, Step};
 use bitflags::bitflags;
+use capstone::prelude::DetailsArchInsn;
 
 #[derive(Clone, Debug)]
 pub struct Aarch64Step {
@@ -14,6 +17,11 @@ pub struct Aarch64Step {
 
 impl Step<32> for Aarch64Step {
     type STATE = Aarch64State;
+    type INSTRUMENT = Aarch64Instrument;
+
+    fn arch(&self) -> Arch {
+        Arch::ARM64
+    }
 
     fn code(&self) -> &[u8] {
         &self.code[..]
@@ -33,6 +41,10 @@ impl Step<32> for Aarch64Step {
 
     fn memory_ops(&self) -> &[super::MemoryOp] {
         &self.memory_ops[..]
+    }
+
+    fn instrument(&self) -> Self::INSTRUMENT {
+        Aarch64Instrument { step: self.clone() }
     }
 }
 
@@ -127,6 +139,88 @@ impl TryFrom<&[String]> for Aarch64Step {
             strace: generic.strace,
             memory_ops: generic.memory_ops,
         })
+    }
+}
+
+pub struct Aarch64Instrument {
+    step: Aarch64Step,
+}
+impl Instrument for Aarch64Instrument {
+    fn recover_branch(
+        &self,
+        cs: &capstone::Capstone,
+        insn: &capstone::Insn,
+        detail: &capstone::InsnDetail,
+    ) -> Option<Branching> {
+        let group_names: Vec<_> = detail
+            .groups()
+            .iter()
+            .map(|g| cs.group_name(*g).unwrap())
+            .collect();
+
+        let is_call_insn = { group_names.contains(&"call".to_string()) };
+        let is_ret_insn = { group_names.contains(&"return".to_string()) };
+
+        assert!(!(is_call_insn && is_ret_insn));
+
+        if is_call_insn {
+            let mnem = insn.mnemonic().unwrap();
+            let return_address = insn.address() + insn.len() as u64;
+            match mnem {
+                "bl" => {
+                    let operand = {
+                        let ops: Vec<_> =
+                            detail.arch_detail().arm64().unwrap().operands().collect();
+                        assert_eq!(ops.len(), 1);
+                        ops[0].clone()
+                    };
+
+                    let operand_val = match operand.op_type {
+                        capstone::arch::arm64::Arm64OperandType::Imm(val) => val,
+                        _ => panic!("bl without imm argument {:?}", operand.op_type),
+                    };
+
+                    let to = operand_val as u64;
+
+                    Some(Branching::Call(to, return_address))
+                }
+                "blr" => {
+                    let operand = {
+                        let ops: Vec<_> =
+                            detail.arch_detail().arm64().unwrap().operands().collect();
+                        assert_eq!(ops.len(), 1);
+                        ops[0].clone()
+                    };
+
+                    let operand_nr = match operand.op_type {
+                        capstone::arch::arm64::Arm64OperandType::Reg(reg) => reg,
+                        _ => panic!("blr without reg argument {:?}", operand.op_type),
+                    };
+
+                    let operand_str = cs.reg_name(operand_nr).unwrap();
+
+                    // hacky af
+                    let reg_nr = operand_str
+                        .strip_prefix('x')
+                        .unwrap()
+                        .parse::<u32>()
+                        .unwrap();
+
+                    // TODO: think about if we should actually use previous state instead of this current/next state?
+                    let target_address = self.step.state().regs()[reg_nr as usize];
+
+                    Some(Branching::Call(target_address, return_address))
+                }
+                _x => {
+                    eprintln!("Unknown Aarch64 call mnemonic: {}", _x);
+                    None
+                }
+            }
+        } else if is_ret_insn {
+            Some(Branching::Return)
+        } else {
+            None
+        }
     }
 }
 

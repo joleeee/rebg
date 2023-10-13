@@ -28,6 +28,9 @@ pub struct SymbolTable {
     pub symbols: Vec<Symbol>,
     pub offsets: Vec<ProgramOffset>,
     pub fallback: Option<Box<SymbolTable>>,
+    /// Source of the binary this symbols applies to. If there is a separate
+    /// debug info file, that should be disregarded wrt. this variable.
+    pub binary_path: String,
 }
 #[derive(Debug, Clone, Copy)]
 pub struct ProgramOffset {
@@ -38,6 +41,7 @@ pub struct ProgramOffset {
 
 // https://developer.arm.com/documentation/100748/0620/Mapping-Code-and-Data-to-the-Target/Loading-armlink-generated-ELF-files-that-have-complex-scatter-files
 impl SymbolTable {
+    /// The PT_LOAD headers
     fn get_offsets(elf: &goblin::elf::Elf) -> Vec<ProgramOffset> {
         elf.program_headers
             .iter()
@@ -124,18 +128,17 @@ impl SymbolTable {
         Self { symbols, ..self }
     }
 
-    pub fn from_elf(elf: &goblin::elf::Elf) -> Self {
-        let offsets = Self::get_offsets(&elf);
+    pub fn from_elf(path: String, elf: &goblin::elf::Elf) -> Self {
+        let offsets = Self::get_offsets(elf);
 
         let empty = Self {
             offsets,
             symbols: vec![],
             fallback: None,
+            binary_path: path,
         };
 
-        let filled = empty.extend_with_debug(elf, u64::MIN, u64::MAX);
-
-        filled
+        empty.extend_with_debug(elf, u64::MIN, u64::MAX)
     }
 
     /// offset based on where the binary is loaded
@@ -166,9 +169,9 @@ impl SymbolTable {
 
     /// Will traverse through self's fallbacks until it comes to the end, it will then add other as
     /// a fallback to that one
-    pub fn join(mut self, other: Self) -> Self {
+    pub fn push_table(mut self, other: Self) -> Self {
         if let Some(fallback) = self.fallback {
-            self.fallback = Some(Box::new(fallback.join(other)))
+            self.fallback = Some(Box::new(fallback.push_table(other)))
         } else {
             self.fallback = Some(Box::new(other));
         }
@@ -198,6 +201,7 @@ mod tests {
         let table = SymbolTable {
             symbols: vec![sym1.clone(), sym2.clone()],
             offsets: vec![],
+            binary_path: "/test/file".to_string(),
             fallback: None,
         };
 
