@@ -188,6 +188,12 @@
 
         const prev = selected_idx;
         switch (action) {
+            case "g":
+                selected_idx = 0;
+                break;
+            case "G":
+                selected_idx = steps.length - 1;
+                break;
             case "j":
                 selected_idx = Math.min(selected_idx + 1, steps.length - 1);
                 break;
