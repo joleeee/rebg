@@ -48,6 +48,14 @@ pub trait Instrument {
         insn: &Insn,
         detail: &InsnDetail,
     ) -> Option<Branching>;
+
+    fn regs_access(&self, cs: &capstone::Capstone, insn: &Insn) -> (Vec<String>, Vec<String>) {
+        let (read, write) = cs.regs_access(insn).unwrap().unwrap();
+        (
+            read.into_iter().map(|r| cs.reg_name(r).unwrap()).collect(),
+            write.into_iter().map(|r| cs.reg_name(r).unwrap()).collect(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -61,6 +69,7 @@ pub enum Branching {
 pub struct Instrumentation {
     pub branch: Option<Branching>,
     pub disassembly: String,
+    pub access: (Vec<String>, Vec<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
