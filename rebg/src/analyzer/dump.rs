@@ -347,8 +347,11 @@ enum StateUpdate {
         offset: u64,
         size: u64,
     },
+    // todo, actually use this
     Munmap {
+        #[allow(dead_code)]
         addr: u64,
+        #[allow(dead_code)]
         size: u64,
     },
 }
