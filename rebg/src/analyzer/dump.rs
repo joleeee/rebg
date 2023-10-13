@@ -62,7 +62,7 @@ impl Analyzer for TraceDumper {
             let elf = goblin::elf::Elf::parse(&contents).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let table = SymbolTable::from_elf(&elf).add_offset(pie.0);
+            let table = SymbolTable::from_elf(path.clone(), &elf).add_offset(pie.0);
 
             // TODO also add debug symbols if they are missing from the binary itself
 
@@ -585,7 +585,7 @@ where
                     println!("MEMMMM");
 
                     if let Ok(elf) = elf {
-                        let mut new_symbol_table = SymbolTable::from_elf(&elf);
+                        let mut new_symbol_table = SymbolTable::from_elf(path, &elf);
 
                         if elf.syms.is_empty() {
                             eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
