@@ -184,7 +184,7 @@ checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 [[package]]
 name = "capstone"
 version = "0.11.0"
-source = "git+https://github.com/joleeee/capstone-rs.git?rev=47c31fae93ef752b445517e3eaf9ec203c742761#47c31fae93ef752b445517e3eaf9ec203c742761"
+source = "git+https://github.com/joleeee/capstone-rs.git?rev=a496259dbf49aed5a67c32844d75b8a020731b64#a496259dbf49aed5a67c32844d75b8a020731b64"
 dependencies = [
  "capstone-sys",
  "libc",
@@ -193,7 +193,7 @@ dependencies = [
 [[package]]
 name = "capstone-sys"
 version = "0.15.0"
-source = "git+https://github.com/joleeee/capstone-rs.git?rev=47c31fae93ef752b445517e3eaf9ec203c742761#47c31fae93ef752b445517e3eaf9ec203c742761"
+source = "git+https://github.com/joleeee/capstone-rs.git?rev=a496259dbf49aed5a67c32844d75b8a020731b64#a496259dbf49aed5a67c32844d75b8a020731b64"
 dependencies = [
  "cc",
  "libc",
