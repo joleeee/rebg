@@ -193,16 +193,17 @@ impl Analyzer for TraceDumper {
 
                 let iter = trace
                     .iter()
+                    .enumerate()
                     .zip(instrumentations.into_iter())
-                    .zip(bt_lens.into_iter())
-                    .enumerate();
+                    .zip(bt_lens.into_iter());
+                // .filter(|(((_, tr), _), _)| tr.state().pc() < 0x5500000000);
 
                 let chunked = iter.chunks(100);
 
                 for chunk in &chunked {
                     let mut parts = Vec::new();
 
-                    for (i, ((step, instru), bt_len)) in chunk {
+                    for (((i, step), instru), bt_len) in chunk {
                         parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len}));
                     }
 
