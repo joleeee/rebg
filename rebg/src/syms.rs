@@ -169,9 +169,9 @@ impl SymbolTable {
 
     /// Will traverse through self's fallbacks until it comes to the end, it will then add other as
     /// a fallback to that one
-    pub fn join(mut self, other: Self) -> Self {
+    pub fn push_table(mut self, other: Self) -> Self {
         if let Some(fallback) = self.fallback {
-            self.fallback = Some(Box::new(fallback.join(other)))
+            self.fallback = Some(Box::new(fallback.push_table(other)))
         } else {
             self.fallback = Some(Box::new(other));
         }

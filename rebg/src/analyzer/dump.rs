@@ -71,7 +71,7 @@ impl Analyzer for TraceDumper {
         // merge into a single table
         let table = symbol_tables
             .into_iter()
-            .reduce(|accum, item| accum.join(item))
+            .reduce(|accum, item| accum.push_table(item))
             .unwrap();
 
         let mut trace = Vec::new();
@@ -621,7 +621,7 @@ where
                         // TODO size
                         new_symbol_table = new_symbol_table.add_offset(addr);
 
-                        self.syms = self.syms.clone().join(new_symbol_table);
+                        self.syms = self.syms.clone().push_table(new_symbol_table);
                     }
                 }
                 Ok(Some(StateUpdate::Munmap { addr: _, size: _ })) => {
