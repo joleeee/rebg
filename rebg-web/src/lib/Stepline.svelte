@@ -212,7 +212,10 @@
                 ) {
                     cur_idx += 1;
                 }
-                selected_idx = cur_idx;
+                // only jump if we actually found something on the same level (TODO figure out if we actually want this)
+                if (steps[cur_idx][0] == target_depth) {
+                    selected_idx = cur_idx;
+                }
                 break;
             }
             case "K": {
@@ -222,7 +225,9 @@
                 while (cur_idx > 0 && steps[cur_idx][0] > target_depth) {
                     cur_idx -= 1;
                 }
-                selected_idx = cur_idx;
+                if (steps[cur_idx][0] == target_depth) {
+                    selected_idx = cur_idx;
+                }
                 break;
             }
             case "h": {
