@@ -160,7 +160,17 @@ impl Analyzer for TraceDumper {
                         }
                     }
                 },
-                _ => {}
+                _ => {
+                    // even if WERE not at a return, we might HAVE actually returned
+                    // because the return was not visible due to qemu shit
+
+                    let idx = bt.iter().position(|v| *v == cur_step.state().pc());
+
+                    if let Some(idx) = idx {
+                        // TODO also make sure sp changed, as a measure to reduce false positives
+                        drop(bt.drain(idx..));
+                    }
+                }
             }
 
             bt_lens.push(bt.len());
