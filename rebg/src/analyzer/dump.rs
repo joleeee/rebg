@@ -9,7 +9,6 @@ use crate::{
     syms::SymbolTable,
     tracer::ParsedStep,
 };
-use capstone::Capstone;
 use goblin::elf::Elf;
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -42,6 +41,7 @@ impl Analyzer for TraceDumper {
         ITER: Iterator<Item = ParsedStep<STEP, N>>,
     {
         let cs = Rc::new(arch.make_capstone().unwrap());
+        let dis = Dis { cs, arch };
 
         let offsets = match iter.next().unwrap() {
             ParsedStep::LibLoad(x) => x,
@@ -98,7 +98,7 @@ impl Analyzer for TraceDumper {
             }
         };
 
-        let mut analyzer = RealAnalyzer::new(cs, arch, table.clone());
+        let mut analyzer = RealAnalyzer::new(dis, arch, table.clone());
 
         // we want changes to instantly show up in the UI, but we are also
         // dependent on the next step for some analysis, so we need to first
@@ -511,7 +511,6 @@ where
     STEP: Step<N>,
 {
     hist: Vec<STEP::STATE>,
-    cs: Rc<Capstone>,
     dis: Dis,
     syms: SymbolTable,
     arch: Arch,
@@ -522,14 +521,10 @@ impl<STEP, const N: usize> RealAnalyzer<STEP, N>
 where
     STEP: Step<N>,
 {
-    fn new(cs: Rc<Capstone>, arch: Arch, syms: SymbolTable) -> Self {
+    fn new(dis: Dis, arch: Arch, syms: SymbolTable) -> Self {
         Self {
             hist: Vec::new(),
-            dis: Dis {
-                arch,
-                cs: cs.clone(),
-            },
-            cs,
+            dis,
             syms,
             arch,
             syscall_state: SyscallState::new(),
@@ -637,7 +632,7 @@ where
         }
 
         let instrum = step.instrument();
-        let branch = instrum.recover_branch(&self.cs, &insn);
+        let branch = instrum.recover_branch(&self.dis.cs, &insn);
 
         // only print memory changes if we're in the user binary
         for MemoryOp {
