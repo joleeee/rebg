@@ -1,4 +1,5 @@
 use super::Analyzer;
+use crate::dis::{self, Dis, Instruction};
 use crate::state::{self, Branching, Instrument};
 use crate::{
     arch::Arch,
@@ -109,7 +110,7 @@ impl Analyzer for TraceDumper {
         let mut bt_lens = Vec::new();
 
         for cur_step in &trace {
-            let instrumentation = analyzer.step(launcher, cur_step);
+            let (_, instrumentation) = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
             let prev_instrumentation = instrumentations.iter().rev().nth(1);
 
@@ -118,7 +119,6 @@ impl Analyzer for TraceDumper {
                 Some(Instrumentation {
                     branch: Some(prev_branch),
                     disassembly: _,
-                    access: _,
                 }) => match prev_branch {
                     Branching::Call(target, return_address) => {
                         // 1. if we are at target, it's a normal call
@@ -512,6 +512,7 @@ where
 {
     hist: Vec<STEP::STATE>,
     cs: Rc<Capstone>,
+    dis: Dis,
     syms: SymbolTable,
     arch: Arch,
     syscall_state: SyscallState,
@@ -524,6 +525,7 @@ where
     fn new(cs: Rc<Capstone>, arch: Arch, syms: SymbolTable) -> Self {
         Self {
             hist: Vec::new(),
+            dis: Dis { cs: cs.clone() },
             cs,
             syms,
             arch,
@@ -531,7 +533,7 @@ where
         }
     }
 
-    fn step<LAUNCHER>(&mut self, launcher: &LAUNCHER, step: &STEP) -> Instrumentation
+    fn step<LAUNCHER>(&mut self, launcher: &LAUNCHER, step: &STEP) -> (Instruction, Instrumentation)
     where
         LAUNCHER: Host,
         <LAUNCHER as Host>::Error: std::fmt::Debug,
@@ -547,12 +549,8 @@ where
         let address = step.address();
         let code = step.code();
 
-        let disasm = self.cs.disasm_all(code, address).unwrap();
-        assert_eq!(disasm.len(), 1);
-        let insn = &disasm[0];
-        let op = inst_to_str(insn, Some(&self.syms));
-
-        let detail = self.cs.insn_detail(insn).expect("no detail");
+        let insn = self.dis.disassemble_one(code, address).unwrap();
+        let op = inst_to_str(&insn, Some(&self.syms));
 
         let symbol = self.syms.lookup(address);
 
@@ -636,8 +634,7 @@ where
         }
 
         let instrum = step.instrument();
-        let branch = instrum.recover_branch(&self.cs, insn, &detail);
-        let access = instrum.regs_access(&self.cs, insn);
+        let branch = instrum.recover_branch(&self.cs, &insn);
 
         // only print memory changes if we're in the user binary
         for MemoryOp {
@@ -656,21 +653,23 @@ where
 
         self.hist.push(step.state().clone());
 
-        Instrumentation {
-            branch,
-            disassembly: op,
-            access,
-        }
+        (
+            insn,
+            Instrumentation {
+                branch,
+                disassembly: op,
+            },
+        )
     }
 }
 
-fn inst_to_str(inst: &capstone::Insn, table: Option<&SymbolTable>) -> String {
+fn inst_to_str(insn: &dis::Instruction, table: Option<&SymbolTable>) -> String {
     lazy_static! {
         static ref RE: Regex = Regex::new(r#"(.*)0x([0-9a-fA-F]*)(.*)"#).unwrap();
     }
 
-    let mn = inst.mnemonic().unwrap();
-    let op = inst.op_str().unwrap();
+    let mn = insn.mnemonic.as_ref().unwrap();
+    let op = insn.op_str.as_ref().unwrap();
 
     let op = match RE.captures(op).zip(table) {
         Some((caps, table)) => {

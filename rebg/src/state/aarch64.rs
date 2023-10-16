@@ -1,10 +1,8 @@
 use std::str::FromStr;
 
-use crate::arch::Arch;
-
 use super::{Branching, GenericState, GenericStep, Instrument, State, Step};
+use crate::{arch::Arch, dis};
 use bitflags::bitflags;
-use capstone::prelude::DetailsArchInsn;
 
 #[derive(Clone, Debug)]
 pub struct Aarch64Step {
@@ -149,32 +147,29 @@ impl Instrument for Aarch64Instrument {
     fn recover_branch(
         &self,
         cs: &capstone::Capstone,
-        insn: &capstone::Insn,
-        detail: &capstone::InsnDetail,
+        insn: &dis::Instruction,
     ) -> Option<Branching> {
-        let group_names: Vec<_> = detail
-            .groups()
-            .iter()
-            .map(|g| cs.group_name(*g).unwrap())
-            .collect();
-
-        let is_call_insn = { group_names.contains(&"call".to_string()) };
-        let is_ret_insn = { group_names.contains(&"return".to_string()) };
+        let is_call_insn = { insn.group_names.contains(&"call".to_string()) };
+        let is_ret_insn = { insn.group_names.contains(&"return".to_string()) };
 
         assert!(!(is_call_insn && is_ret_insn));
 
         if is_call_insn {
-            let mnem = insn.mnemonic().unwrap();
-            let return_address = insn.address() + insn.len() as u64;
-            match mnem {
-                "bl" => {
-                    let operand = {
-                        let ops: Vec<_> =
-                            detail.arch_detail().arm64().unwrap().operands().collect();
-                        assert_eq!(ops.len(), 1);
-                        ops[0].clone()
-                    };
+            let mnem = insn.mnemonic.as_ref().unwrap();
+            let return_address = insn.address + insn.len as u64;
 
+            let operand = {
+                assert_eq!(insn.operands.len(), 1);
+                insn.operands[0].clone()
+            };
+
+            let operand = match operand {
+                capstone::arch::ArchOperand::Arm64Operand(o) => o,
+                _ => panic!("nah"),
+            };
+
+            match mnem.as_str() {
+                "bl" => {
                     let operand_val = match operand.op_type {
                         capstone::arch::arm64::Arm64OperandType::Imm(val) => val,
                         _ => panic!("bl without imm argument {:?}", operand.op_type),
@@ -185,13 +180,6 @@ impl Instrument for Aarch64Instrument {
                     Some(Branching::Call(to, return_address))
                 }
                 "blr" => {
-                    let operand = {
-                        let ops: Vec<_> =
-                            detail.arch_detail().arm64().unwrap().operands().collect();
-                        assert_eq!(ops.len(), 1);
-                        ops[0].clone()
-                    };
-
                     let operand_nr = match operand.op_type {
                         capstone::arch::arm64::Arm64OperandType::Reg(reg) => reg,
                         _ => panic!("blr without reg argument {:?}", operand.op_type),
