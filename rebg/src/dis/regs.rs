@@ -392,19 +392,20 @@ pub enum Reg {
 #[cfg(test)]
 mod tests {
     use capstone::RegId;
+    #[allow(unused_imports)]
     use convert_case::Casing;
 
     use super::Aarch64Reg;
-    use crate::{arch::Arch, dis::regs::Reg};
+    use crate::arch::Arch;
 
     #[test]
     fn aarch64_canon() {
-        // assert_eq!(Aarch64Reg::W0.canonical(), Aarch64Reg::X0);
-        // assert_eq!(Aarch64Reg::X5.canonical(), Aarch64Reg::X5);
-        // assert_eq!(Aarch64Reg::SP.canonical(), Aarch64Reg::SP);
-        // assert_eq!(Aarch64Reg::XZR.canonical(), Aarch64Reg::XZR);
-        // assert_eq!(Aarch64Reg::X30.canonical(), Aarch64Reg::X30);
-        // assert_eq!(Aarch64Reg::W30.canonical(), Aarch64Reg::X30);
+        assert_eq!(Aarch64Reg::W0.canonical(), Aarch64Reg::X0);
+        assert_eq!(Aarch64Reg::X5.canonical(), Aarch64Reg::X5);
+        assert_eq!(Aarch64Reg::Sp.canonical(), Aarch64Reg::Sp);
+        assert_eq!(Aarch64Reg::Xzr.canonical(), Aarch64Reg::Xzr);
+        assert_eq!(Aarch64Reg::Lr.canonical(), Aarch64Reg::Lr);
+        assert_eq!(Aarch64Reg::W30.canonical(), Aarch64Reg::Lr);
     }
 
     #[test]
@@ -416,12 +417,11 @@ mod tests {
             let i = RegId(i);
 
             let cs_name = cs.reg_name(i);
+            let our_name = Aarch64Reg::from_num(i.0).map(|reg| reg.as_str().to_string());
 
-            // let dis_name = None;
-
-            // if cs_name != dis_name {
-            //     panic!("{cs_name:?} != {dis_name:?}")
-            // }
+            if cs_name != our_name {
+                panic!("{cs_name:?} != {our_name:?}")
+            }
 
             // cargo test aarch64_reg_names -- --nocapture
             // if let Some(name) = cs_name {
