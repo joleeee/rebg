@@ -3,7 +3,6 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use bitflags::Flags;
-use capstone::{Insn, InsnDetail};
 use hex::FromHex;
 use num_traits::Num;
 
@@ -12,7 +11,7 @@ pub use aarch64::{Aarch64Flags, Aarch64State, Aarch64Step};
 pub mod x64;
 pub use x64::{X64Flags, X64State, X64Step};
 
-use crate::arch::Arch;
+use crate::{arch::Arch, dis};
 
 /// A single step in the trace.
 pub trait Step<const N: usize>: Clone + std::marker::Send + 'static {
@@ -42,20 +41,8 @@ pub trait State<const N: usize>: Clone {
 }
 
 pub trait Instrument {
-    fn recover_branch(
-        &self,
-        cs: &capstone::Capstone,
-        insn: &Insn,
-        detail: &InsnDetail,
-    ) -> Option<Branching>;
-
-    fn regs_access(&self, cs: &capstone::Capstone, insn: &Insn) -> (Vec<String>, Vec<String>) {
-        let (read, write) = cs.regs_access(insn).unwrap().unwrap();
-        (
-            read.into_iter().map(|r| cs.reg_name(r).unwrap()).collect(),
-            write.into_iter().map(|r| cs.reg_name(r).unwrap()).collect(),
-        )
-    }
+    fn recover_branch(&self, cs: &capstone::Capstone, insn: &dis::Instruction)
+        -> Option<Branching>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -69,7 +56,6 @@ pub enum Branching {
 pub struct Instrumentation {
     pub branch: Option<Branching>,
     pub disassembly: String,
-    pub access: (Vec<String>, Vec<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

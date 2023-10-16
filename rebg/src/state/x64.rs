@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::arch::Arch;
+use crate::{
+    arch::Arch,
+    dis::{self, groups::Group},
+};
 
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use bitflags::bitflags;
@@ -13,7 +16,6 @@ use capstone::{
             X86_REG_RDI, X86_REG_RDX, X86_REG_RIP, X86_REG_RSI, X86_REG_RSP,
         },
     },
-    prelude::DetailsArchInsn,
     RegId,
 };
 
@@ -173,32 +175,25 @@ pub struct X64Instrument {
 impl Instrument for X64Instrument {
     fn recover_branch(
         &self,
-        cs: &capstone::Capstone,
-        insn: &capstone::Insn,
-        detail: &capstone::InsnDetail,
+        _cs: &capstone::Capstone,
+        insn: &dis::Instruction,
     ) -> Option<Branching> {
-        let group_names: Vec<_> = detail
-            .groups()
-            .iter()
-            .map(|g| cs.group_name(*g).unwrap())
-            .collect();
-
-        let is_call_insn = { group_names.contains(&"call".to_string()) };
-        let is_ret_insn = { group_names.contains(&"ret".to_string()) };
+        let is_call_insn = insn.groups.iter().any(Group::is_call);
+        let is_ret_insn = insn.groups.iter().any(Group::is_ret);
 
         assert!(!(is_call_insn && is_ret_insn));
 
         if is_call_insn {
-            let return_address = insn.address() + insn.len() as u64;
+            let return_address = insn.address + insn.len as u64;
 
             let operand = {
-                let arch_detail = detail.arch_detail();
+                assert_eq!(insn.operands.len(), 1);
+                insn.operands[0].clone()
+            };
 
-                let arch_detail = arch_detail.x86().unwrap();
-                let mut arch_operands = arch_detail.operands();
-
-                assert_eq!(arch_operands.len(), 1);
-                arch_operands.next().unwrap()
+            let operand = match operand {
+                capstone::arch::ArchOperand::X86Operand(o) => o,
+                _ => panic!("nah"),
             };
 
             match operand.op_type {
