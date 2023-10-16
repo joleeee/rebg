@@ -13,6 +13,7 @@ argh = "0.1.10"
 bitflags = "2.3.1"
 bollard = "0.15.0"
 capstone = { git = "https://github.com/joleeee/capstone-rs.git", rev = "a496259dbf49aed5a67c32844d75b8a020731b64" }
+convert_case = "0.6.0"
 flume = "0.10.14"
 futures = "0.3.28"
 goblin = "0.6.1"
