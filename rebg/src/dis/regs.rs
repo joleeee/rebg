@@ -1,5 +1,7 @@
 #![allow(non_camel_case_types, dead_code)]
 
+use crate::arch::Arch;
+
 macro_rules! enum_from_pairs {
     ($name:ident, $(($num:expr, $s:ident, $str:expr, $parent:ident)),*) => {
         #[derive(PartialEq, Debug)]
@@ -375,19 +377,268 @@ enum_from_pairs!(
     (341, V31, "v31", V31)
 );
 
+enum_from_pairs!(
+    X64Reg,
+    (1, Ah, "ah", Ah),
+    (2, Al, "al", Al),
+    (3, Ax, "ax", Ax),
+    (4, Bh, "bh", Bh),
+    (5, Bl, "bl", Bl),
+    (6, Bp, "bp", Bp),
+    (7, Bpl, "bpl", Bpl),
+    (8, Bx, "bx", Bx),
+    (9, Ch, "ch", Ch),
+    (10, Cl, "cl", Cl),
+    (11, Cs, "cs", Cs),
+    (12, Cx, "cx", Cx),
+    (13, Dh, "dh", Dh),
+    (14, Di, "di", Di),
+    (15, Dil, "dil", Dil),
+    (16, Dl, "dl", Dl),
+    (17, Ds, "ds", Ds),
+    (18, Dx, "dx", Dx),
+    (19, Eax, "eax", Eax),
+    (20, Ebp, "ebp", Ebp),
+    (21, Ebx, "ebx", Ebx),
+    (22, Ecx, "ecx", Ecx),
+    (23, Edi, "edi", Edi),
+    (24, Edx, "edx", Edx),
+    (25, Rflags, "rflags", Rflags),
+    (26, Eip, "eip", Eip),
+    (27, Eiz, "eiz", Eiz),
+    (28, Es, "es", Es),
+    (29, Esi, "esi", Esi),
+    (30, Esp, "esp", Esp),
+    (31, Fpsw, "fpsw", Fpsw),
+    (32, Fs, "fs", Fs),
+    (33, Gs, "gs", Gs),
+    (34, Ip, "ip", Ip),
+    (35, Rax, "rax", Rax),
+    (36, Rbp, "rbp", Rbp),
+    (37, Rbx, "rbx", Rbx),
+    (38, Rcx, "rcx", Rcx),
+    (39, Rdi, "rdi", Rdi),
+    (40, Rdx, "rdx", Rdx),
+    (41, Rip, "rip", Rip),
+    (42, Riz, "riz", Riz),
+    (43, Rsi, "rsi", Rsi),
+    (44, Rsp, "rsp", Rsp),
+    (45, Si, "si", Si),
+    (46, Sil, "sil", Sil),
+    (47, Sp, "sp", Sp),
+    (48, Spl, "spl", Spl),
+    (49, Ss, "ss", Ss),
+    (50, Cr0, "cr0", Cr0),
+    (51, Cr1, "cr1", Cr1),
+    (52, Cr2, "cr2", Cr2),
+    (53, Cr3, "cr3", Cr3),
+    (54, Cr4, "cr4", Cr4),
+    (55, Cr5, "cr5", Cr5),
+    (56, Cr6, "cr6", Cr6),
+    (57, Cr7, "cr7", Cr7),
+    (58, Cr8, "cr8", Cr8),
+    (59, Cr9, "cr9", Cr9),
+    (60, Cr10, "cr10", Cr10),
+    (61, Cr11, "cr11", Cr11),
+    (62, Cr12, "cr12", Cr12),
+    (63, Cr13, "cr13", Cr13),
+    (64, Cr14, "cr14", Cr14),
+    (65, Cr15, "cr15", Cr15),
+    (66, Dr0, "dr0", Dr0),
+    (67, Dr1, "dr1", Dr1),
+    (68, Dr2, "dr2", Dr2),
+    (69, Dr3, "dr3", Dr3),
+    (70, Dr4, "dr4", Dr4),
+    (71, Dr5, "dr5", Dr5),
+    (72, Dr6, "dr6", Dr6),
+    (73, Dr7, "dr7", Dr7),
+    (74, Dr8, "dr8", Dr8),
+    (75, Dr9, "dr9", Dr9),
+    (76, Dr10, "dr10", Dr10),
+    (77, Dr11, "dr11", Dr11),
+    (78, Dr12, "dr12", Dr12),
+    (79, Dr13, "dr13", Dr13),
+    (80, Dr14, "dr14", Dr14),
+    (81, Dr15, "dr15", Dr15),
+    (82, Fp0, "fp0", Fp0),
+    (83, Fp1, "fp1", Fp1),
+    (84, Fp2, "fp2", Fp2),
+    (85, Fp3, "fp3", Fp3),
+    (86, Fp4, "fp4", Fp4),
+    (87, Fp5, "fp5", Fp5),
+    (88, Fp6, "fp6", Fp6),
+    (89, Fp7, "fp7", Fp7),
+    (90, K0, "k0", K0),
+    (91, K1, "k1", K1),
+    (92, K2, "k2", K2),
+    (93, K3, "k3", K3),
+    (94, K4, "k4", K4),
+    (95, K5, "k5", K5),
+    (96, K6, "k6", K6),
+    (97, K7, "k7", K7),
+    (98, Mm0, "mm0", Mm0),
+    (99, Mm1, "mm1", Mm1),
+    (100, Mm2, "mm2", Mm2),
+    (101, Mm3, "mm3", Mm3),
+    (102, Mm4, "mm4", Mm4),
+    (103, Mm5, "mm5", Mm5),
+    (104, Mm6, "mm6", Mm6),
+    (105, Mm7, "mm7", Mm7),
+    (106, R8, "r8", R8),
+    (107, R9, "r9", R9),
+    (108, R10, "r10", R10),
+    (109, R11, "r11", R11),
+    (110, R12, "r12", R12),
+    (111, R13, "r13", R13),
+    (112, R14, "r14", R14),
+    (113, R15, "r15", R15),
+    (114, St0, "st(0)", St0),
+    (115, St1, "st(1)", St1),
+    (116, St2, "st(2)", St2),
+    (117, St3, "st(3)", St3),
+    (118, St4, "st(4)", St4),
+    (119, St5, "st(5)", St5),
+    (120, St6, "st(6)", St6),
+    (121, St7, "st(7)", St7),
+    (122, Xmm0, "xmm0", Xmm0),
+    (123, Xmm1, "xmm1", Xmm1),
+    (124, Xmm2, "xmm2", Xmm2),
+    (125, Xmm3, "xmm3", Xmm3),
+    (126, Xmm4, "xmm4", Xmm4),
+    (127, Xmm5, "xmm5", Xmm5),
+    (128, Xmm6, "xmm6", Xmm6),
+    (129, Xmm7, "xmm7", Xmm7),
+    (130, Xmm8, "xmm8", Xmm8),
+    (131, Xmm9, "xmm9", Xmm9),
+    (132, Xmm10, "xmm10", Xmm10),
+    (133, Xmm11, "xmm11", Xmm11),
+    (134, Xmm12, "xmm12", Xmm12),
+    (135, Xmm13, "xmm13", Xmm13),
+    (136, Xmm14, "xmm14", Xmm14),
+    (137, Xmm15, "xmm15", Xmm15),
+    (138, Xmm16, "xmm16", Xmm16),
+    (139, Xmm17, "xmm17", Xmm17),
+    (140, Xmm18, "xmm18", Xmm18),
+    (141, Xmm19, "xmm19", Xmm19),
+    (142, Xmm20, "xmm20", Xmm20),
+    (143, Xmm21, "xmm21", Xmm21),
+    (144, Xmm22, "xmm22", Xmm22),
+    (145, Xmm23, "xmm23", Xmm23),
+    (146, Xmm24, "xmm24", Xmm24),
+    (147, Xmm25, "xmm25", Xmm25),
+    (148, Xmm26, "xmm26", Xmm26),
+    (149, Xmm27, "xmm27", Xmm27),
+    (150, Xmm28, "xmm28", Xmm28),
+    (151, Xmm29, "xmm29", Xmm29),
+    (152, Xmm30, "xmm30", Xmm30),
+    (153, Xmm31, "xmm31", Xmm31),
+    (154, Ymm0, "ymm0", Ymm0),
+    (155, Ymm1, "ymm1", Ymm1),
+    (156, Ymm2, "ymm2", Ymm2),
+    (157, Ymm3, "ymm3", Ymm3),
+    (158, Ymm4, "ymm4", Ymm4),
+    (159, Ymm5, "ymm5", Ymm5),
+    (160, Ymm6, "ymm6", Ymm6),
+    (161, Ymm7, "ymm7", Ymm7),
+    (162, Ymm8, "ymm8", Ymm8),
+    (163, Ymm9, "ymm9", Ymm9),
+    (164, Ymm10, "ymm10", Ymm10),
+    (165, Ymm11, "ymm11", Ymm11),
+    (166, Ymm12, "ymm12", Ymm12),
+    (167, Ymm13, "ymm13", Ymm13),
+    (168, Ymm14, "ymm14", Ymm14),
+    (169, Ymm15, "ymm15", Ymm15),
+    (170, Ymm16, "ymm16", Ymm16),
+    (171, Ymm17, "ymm17", Ymm17),
+    (172, Ymm18, "ymm18", Ymm18),
+    (173, Ymm19, "ymm19", Ymm19),
+    (174, Ymm20, "ymm20", Ymm20),
+    (175, Ymm21, "ymm21", Ymm21),
+    (176, Ymm22, "ymm22", Ymm22),
+    (177, Ymm23, "ymm23", Ymm23),
+    (178, Ymm24, "ymm24", Ymm24),
+    (179, Ymm25, "ymm25", Ymm25),
+    (180, Ymm26, "ymm26", Ymm26),
+    (181, Ymm27, "ymm27", Ymm27),
+    (182, Ymm28, "ymm28", Ymm28),
+    (183, Ymm29, "ymm29", Ymm29),
+    (184, Ymm30, "ymm30", Ymm30),
+    (185, Ymm31, "ymm31", Ymm31),
+    (186, Zmm0, "zmm0", Zmm0),
+    (187, Zmm1, "zmm1", Zmm1),
+    (188, Zmm2, "zmm2", Zmm2),
+    (189, Zmm3, "zmm3", Zmm3),
+    (190, Zmm4, "zmm4", Zmm4),
+    (191, Zmm5, "zmm5", Zmm5),
+    (192, Zmm6, "zmm6", Zmm6),
+    (193, Zmm7, "zmm7", Zmm7),
+    (194, Zmm8, "zmm8", Zmm8),
+    (195, Zmm9, "zmm9", Zmm9),
+    (196, Zmm10, "zmm10", Zmm10),
+    (197, Zmm11, "zmm11", Zmm11),
+    (198, Zmm12, "zmm12", Zmm12),
+    (199, Zmm13, "zmm13", Zmm13),
+    (200, Zmm14, "zmm14", Zmm14),
+    (201, Zmm15, "zmm15", Zmm15),
+    (202, Zmm16, "zmm16", Zmm16),
+    (203, Zmm17, "zmm17", Zmm17),
+    (204, Zmm18, "zmm18", Zmm18),
+    (205, Zmm19, "zmm19", Zmm19),
+    (206, Zmm20, "zmm20", Zmm20),
+    (207, Zmm21, "zmm21", Zmm21),
+    (208, Zmm22, "zmm22", Zmm22),
+    (209, Zmm23, "zmm23", Zmm23),
+    (210, Zmm24, "zmm24", Zmm24),
+    (211, Zmm25, "zmm25", Zmm25),
+    (212, Zmm26, "zmm26", Zmm26),
+    (213, Zmm27, "zmm27", Zmm27),
+    (214, Zmm28, "zmm28", Zmm28),
+    (215, Zmm29, "zmm29", Zmm29),
+    (216, Zmm30, "zmm30", Zmm30),
+    (217, Zmm31, "zmm31", Zmm31),
+    (218, R8B, "r8b", R8B),
+    (219, R9B, "r9b", R9B),
+    (220, R10B, "r10b", R10B),
+    (221, R11B, "r11b", R11B),
+    (222, R12B, "r12b", R12B),
+    (223, R13B, "r13b", R13B),
+    (224, R14B, "r14b", R14B),
+    (225, R15B, "r15b", R15B),
+    (226, R8D, "r8d", R8D),
+    (227, R9D, "r9d", R9D),
+    (228, R10D, "r10d", R10D),
+    (229, R11D, "r11d", R11D),
+    (230, R12D, "r12d", R12D),
+    (231, R13D, "r13d", R13D),
+    (232, R14D, "r14d", R14D),
+    (233, R15D, "r15d", R15D),
+    (234, R8W, "r8w", R8W),
+    (235, R9W, "r9w", R9W),
+    (236, R10W, "r10w", R10W),
+    (237, R11W, "r11w", R11W),
+    (238, R12W, "r12w", R12W),
+    (239, R13W, "r13w", R13W),
+    (240, R14W, "r14w", R14W),
+    (241, R15W, "r15w", R15W),
+    (242, Bnd0, "bnd0", Bnd0),
+    (243, Bnd1, "bnd1", Bnd1),
+    (244, Bnd2, "bnd2", Bnd2),
+    (245, Bnd3, "bnd3", Bnd3)
+);
+
 pub enum Reg {
     Aarch64Reg(Aarch64Reg),
-    // X64Reg(X64Reg),
+    X64Reg(X64Reg),
 }
 
-// impl Reg {
-//     pub fn from_num(arch: Arch, num: u8) -> Option<Self> {
-//         Some(match arch {
-//             Arch::ARM64 => Reg::Aarch64Reg(Aarch64Reg::from_num(num)?),
-//             Arch::X86_64 => Reg::X64Reg(X64Reg::from_num(num)?),
-//         })
-//     }
-// }
+impl Reg {
+    pub fn from_num(arch: Arch, num: u16) -> Option<Self> {
+        Some(match arch {
+            Arch::ARM64 => Reg::Aarch64Reg(Aarch64Reg::from_num(num)?),
+            Arch::X86_64 => Reg::X64Reg(X64Reg::from_num(num)?),
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -395,7 +646,7 @@ mod tests {
     #[allow(unused_imports)]
     use convert_case::Casing;
 
-    use super::Aarch64Reg;
+    use super::{Aarch64Reg, X64Reg};
     use crate::arch::Arch;
 
     #[test]
@@ -424,6 +675,33 @@ mod tests {
             }
 
             // cargo test aarch64_reg_names -- --nocapture
+            // if let Some(name) = cs_name {
+            //     println!(
+            //         "({}, {}, \"{}\", {}),",
+            //         i.0,
+            //         name.to_case(convert_case::Case::Pascal),
+            //         name,
+            //         name.to_case(convert_case::Case::Pascal),
+            //     );
+            // }
+        }
+    }
+
+    #[test]
+    fn x64_reg_names() {
+        let arch = Arch::X86_64;
+        let cs = arch.make_capstone().unwrap();
+
+        for i in 0..=u16::MAX {
+            let i = RegId(i);
+
+            let cs_name = cs.reg_name(i);
+            let our_name = X64Reg::from_num(i.0).map(|reg| reg.as_str().to_string());
+
+            if cs_name != our_name {
+                panic!("{cs_name:?} != {our_name:?}")
+            }
+
             // if let Some(name) = cs_name {
             //     println!(
             //         "({}, {}, \"{}\", {}),",
