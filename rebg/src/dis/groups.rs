@@ -5,10 +5,12 @@
 
 #![allow(non_camel_case_types, dead_code)]
 
+use crate::arch::Arch;
+
 macro_rules! enum_from_pairs {
     ($name:ident, $(($num:expr, $s:ident, $str:expr)),*) => {
         #[derive(Debug)]
-        enum $name {
+        pub enum $name {
             $( $s = $num, )*
         }
 
@@ -121,6 +123,35 @@ enum_from_pairs!(
     (169, Fpu, "fpu")
 );
 
+pub enum Group {
+    Aarch64Group(Aarch64Group),
+    X64Group(X64Group),
+}
+
+impl Group {
+    fn from_num(arch: Arch, num: u8) -> Option<Self> {
+        Some(match arch {
+            Arch::ARM64 => Group::Aarch64Group(Aarch64Group::from_num(num)?),
+            Arch::X86_64 => Group::X64Group(X64Group::from_num(num)?),
+        })
+    }
+
+    fn is_call(&self) -> bool {
+        match &self {
+            Group::Aarch64Group(Aarch64Group::Call) => true,
+            Group::X64Group(X64Group::Call) => true,
+            _ => false,
+        }
+    }
+
+    fn is_ret(&self) -> bool {
+        match &self {
+            Group::Aarch64Group(Aarch64Group::Return) => true,
+            Group::X64Group(X64Group::Ret) => true,
+            _ => false,
+        }
+    }
+}
 
 // common groups (used in an example binary)
 // aarch64: 7, 3, 2, 4, 129, 130, 1, 6
@@ -128,10 +159,10 @@ enum_from_pairs!(
 
 #[cfg(test)]
 mod tests {
+    use super::{Aarch64Group, X64Group};
+    use crate::arch::Arch;
     use capstone::InsnGroupId;
     use std::rc::Rc;
-    use crate::arch::Arch;
-    use super::{Aarch64Group, X64Group};
 
     #[test]
     fn aarch64_group_names() {
