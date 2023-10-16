@@ -15,7 +15,6 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::json;
-use std::collections::HashSet;
 use std::net::TcpListener;
 use std::rc::Rc;
 use std::{
@@ -110,11 +109,8 @@ impl Analyzer for TraceDumper {
         let mut bt = Vec::new();
         let mut bt_lens = Vec::new();
 
-        let mut all_groups = HashSet::new();
-
         for cur_step in &trace {
-            let (insn, instrumentation) = analyzer.step(launcher, cur_step);
-            all_groups.extend(insn.groups.iter().map(|x| x.0));
+            let (_, instrumentation) = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
             let prev_instrumentation = instrumentations.iter().rev().nth(1);
 
@@ -180,8 +176,6 @@ impl Analyzer for TraceDumper {
 
             bt_lens.push(bt.len());
         }
-
-        dbg!(&all_groups);
 
         // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
         assert_eq!(instrumentations.last().and_then(|x| x.branch.clone()), None);

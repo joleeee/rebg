@@ -1,7 +1,10 @@
 use std::str::FromStr;
 
 use super::{Branching, GenericState, GenericStep, Instrument, State, Step};
-use crate::{arch::Arch, dis};
+use crate::{
+    arch::Arch,
+    dis::{self, groups::Group},
+};
 use bitflags::bitflags;
 
 #[derive(Clone, Debug)]
@@ -149,8 +152,8 @@ impl Instrument for Aarch64Instrument {
         cs: &capstone::Capstone,
         insn: &dis::Instruction,
     ) -> Option<Branching> {
-        let is_call_insn = { insn.group_names.contains(&"call".to_string()) };
-        let is_ret_insn = { insn.group_names.contains(&"return".to_string()) };
+        let is_call_insn = insn.groups.iter().any(Group::is_call);
+        let is_ret_insn = insn.groups.iter().any(Group::is_ret);
 
         assert!(!(is_call_insn && is_ret_insn));
 

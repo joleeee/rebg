@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::{arch::Arch, dis};
+use crate::{
+    arch::Arch,
+    dis::{self, groups::Group},
+};
 
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use bitflags::bitflags;
@@ -175,8 +178,8 @@ impl Instrument for X64Instrument {
         _cs: &capstone::Capstone,
         insn: &dis::Instruction,
     ) -> Option<Branching> {
-        let is_call_insn = { insn.group_names.contains(&"call".to_string()) };
-        let is_ret_insn = { insn.group_names.contains(&"ret".to_string()) };
+        let is_call_insn = insn.groups.iter().any(Group::is_call);
+        let is_ret_insn = insn.groups.iter().any(Group::is_ret);
 
         assert!(!(is_call_insn && is_ret_insn));
 

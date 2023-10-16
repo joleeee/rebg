@@ -13,6 +13,8 @@ use crate::arch::Arch;
 use std::rc::Rc;
 use thiserror::Error;
 
+use self::groups::Group;
+
 pub struct Dis {
     pub arch: Arch,
     pub cs: Rc<capstone::Capstone>,
@@ -32,14 +34,15 @@ pub struct Instruction {
 
     // blah
     pub operands: Vec<capstone::arch::ArchOperand>,
-    pub groups: Vec<capstone::InsnGroupId>,
-    pub group_names: Vec<String>,
+    pub groups: Vec<Group>,
 }
 
 #[derive(Error, Debug)]
 pub enum DisError {
     #[error("capstone")]
     Capstone(#[from] capstone::Error),
+    #[error("invalid groupid")]
+    NoGroup(u8),
 }
 
 impl Dis {
@@ -54,11 +57,12 @@ impl Dis {
         let detail = self.cs.insn_detail(insn)?;
 
         let operands = detail.arch_detail().operands();
-        let groups: Vec<_> = detail.groups().into();
-        let group_names = groups
-            .iter()
-            .map(|g| self.cs.group_name(*g).unwrap())
-            .collect();
+        let groups_ids: Vec<_> = detail.groups().into();
+
+        let mut groups = Vec::new();
+        for id in groups_ids {
+            groups.push(Group::from_num(self.arch, id.0).ok_or(DisError::NoGroup(id.0))?);
+        }
 
         let (read, write) = self.cs.regs_access(insn).unwrap().unwrap();
 
@@ -71,7 +75,6 @@ impl Dis {
             op_str: insn.op_str().map(str::to_string),
             operands,
             groups,
-            group_names,
         })
     }
 }

@@ -129,27 +129,25 @@ pub enum Group {
 }
 
 impl Group {
-    fn from_num(arch: Arch, num: u8) -> Option<Self> {
+    pub fn from_num(arch: Arch, num: u8) -> Option<Self> {
         Some(match arch {
             Arch::ARM64 => Group::Aarch64Group(Aarch64Group::from_num(num)?),
             Arch::X86_64 => Group::X64Group(X64Group::from_num(num)?),
         })
     }
 
-    fn is_call(&self) -> bool {
-        match &self {
-            Group::Aarch64Group(Aarch64Group::Call) => true,
-            Group::X64Group(X64Group::Call) => true,
-            _ => false,
-        }
+    pub fn is_call(&self) -> bool {
+        matches!(
+            self,
+            Group::Aarch64Group(Aarch64Group::Call) | Group::X64Group(X64Group::Call)
+        )
     }
 
-    fn is_ret(&self) -> bool {
-        match &self {
-            Group::Aarch64Group(Aarch64Group::Return) => true,
-            Group::X64Group(X64Group::Ret) => true,
-            _ => false,
-        }
+    pub fn is_ret(&self) -> bool {
+        matches!(
+            self,
+            Group::Aarch64Group(Aarch64Group::Return) | Group::X64Group(X64Group::Ret)
+        )
     }
 }
 
