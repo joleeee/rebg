@@ -8,6 +8,7 @@
 // want `rax` (or some other canonical ref)
 
 pub mod groups;
+pub mod regs;
 
 use crate::arch::Arch;
 use std::rc::Rc;
