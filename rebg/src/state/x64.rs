@@ -105,8 +105,10 @@ impl State<16> for X64State {
     }
 
     fn reg_name_idx(i: usize) -> &'static str {
+        // no cure why the order is so fucked
+        // TODO fix this in a much better way :^)
         [
-            "rax", "rbx", "rcx", "rdx", "rbp", "rsp", "rsi", "rdi", "r8", "r9", "r10", "r11",
+            "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11",
             "r12", "r13", "r14", "r15",
         ][i]
     }
@@ -117,11 +119,11 @@ impl State<16> for X64State {
             Reg::Aarch64Reg(_) => return None,
             Reg::X64Reg(v) => match v {
                 dis::regs::X64Reg::Rax => 0,
-                dis::regs::X64Reg::Rbx => 1,
-                dis::regs::X64Reg::Rcx => 2,
-                dis::regs::X64Reg::Rdx => 3,
-                dis::regs::X64Reg::Rbp => 4,
-                dis::regs::X64Reg::Rsp => 5,
+                dis::regs::X64Reg::Rbx => 3, // ??
+                dis::regs::X64Reg::Rcx => 1, // ??
+                dis::regs::X64Reg::Rdx => 2, // ??
+                dis::regs::X64Reg::Rbp => 5, // ??
+                dis::regs::X64Reg::Rsp => 4, // ??
                 dis::regs::X64Reg::Rsi => 6,
                 dis::regs::X64Reg::Rdi => 7,
                 dis::regs::X64Reg::R8 => 8,
