@@ -638,6 +638,13 @@ impl Reg {
             Arch::X86_64 => Reg::X64Reg(X64Reg::from_num(num)?),
         })
     }
+
+    pub fn canonical(self) -> Self {
+        match self {
+            Reg::Aarch64Reg(r) => Reg::Aarch64Reg(r.canonical()),
+            Reg::X64Reg(r) => Reg::X64Reg(r.canonical()),
+        }
+    }
 }
 
 #[cfg(test)]
