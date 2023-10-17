@@ -21,6 +21,7 @@ pub struct Dis {
     pub cs: Rc<capstone::Capstone>,
 }
 
+#[derive(Clone, Debug)]
 pub struct Instruction {
     pub len: usize,
     pub address: u64,

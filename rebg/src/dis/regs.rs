@@ -4,7 +4,7 @@ use crate::arch::Arch;
 
 macro_rules! enum_from_pairs {
     ($name:ident, $(($num:expr, $s:ident, $str:expr, $parent:ident)),*) => {
-        #[derive(PartialEq, Debug)]
+        #[derive(Clone, Copy, Debug, PartialEq)]
         pub enum $name {
             $( $s = $num, )*
         }
@@ -626,6 +626,7 @@ enum_from_pairs!(
     (245, Bnd3, "bnd3", Bnd3)
 );
 
+#[derive(Clone, Copy, Debug)]
 pub enum Reg {
     Aarch64Reg(Aarch64Reg),
     X64Reg(X64Reg),

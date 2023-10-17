@@ -9,7 +9,7 @@ use crate::arch::Arch;
 
 macro_rules! enum_from_pairs {
     ($name:ident, $(($num:expr, $s:ident, $str:expr)),*) => {
-        #[derive(Debug)]
+        #[derive(Clone, Copy, Debug, PartialEq)]
         pub enum $name {
             $( $s = $num, )*
         }
@@ -123,6 +123,7 @@ enum_from_pairs!(
     (169, Fpu, "fpu")
 );
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Group {
     Aarch64Group(Aarch64Group),
     X64Group(X64Group),

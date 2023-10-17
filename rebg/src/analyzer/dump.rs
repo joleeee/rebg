@@ -105,13 +105,15 @@ impl Analyzer for TraceDumper {
         // send the raw step, then later send the analyzed step
 
         let mut instrumentations = Vec::new();
+        let mut insns = Vec::new();
 
         let mut bt = Vec::new();
         let mut bt_lens = Vec::new();
 
         for cur_step in &trace {
-            let (_, instrumentation) = analyzer.step(launcher, cur_step);
+            let (insn, instrumentation) = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
+            insns.push(insn);
             let prev_instrumentation = instrumentations.iter().rev().nth(1);
 
             // do for the PREVIOUS branch
@@ -196,6 +198,7 @@ impl Analyzer for TraceDumper {
         let server = TcpListener::bind("127.0.0.1:9001").unwrap();
         for stream in server.incoming() {
             let trace = trace.clone();
+            let insns = insns.clone();
             let instrumentations = instrumentations.clone();
             let bt_lens = bt_lens.clone();
             let table = table.clone();
@@ -254,32 +257,48 @@ impl Analyzer for TraceDumper {
                     let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
                     match msg {
                         RebgRequest::Registers(idx) => {
-                            let cur_regs = {
-                                let step = trace.get(idx as usize).unwrap();
-                                step.state().regs()
-                            };
-                            let prev_regs = {
-                                if idx > 0 {
-                                    let step = trace.get((idx - 1) as usize).unwrap();
-                                    Some(step.state().regs())
+                            // show current values
+                            let step = trace.get(idx as usize).unwrap();
+                            let cur_regs = step.state().regs();
+
+                            // with markings based on what happen from the PREV step
+                            let insn = insns.iter().nth(idx as usize);
+                            let mut modifiers = vec![String::new(); cur_regs.len()];
+
+                            for r in insn.map(|i| i.read.clone()).unwrap_or_default() {
+                                let idx = if let Some(idx) =
+                                    <STEP as state::Step<N>>::STATE::reg_idx(r)
+                                {
+                                    idx
                                 } else {
-                                    None
-                                }
-                            };
+                                    continue;
+                                };
 
-                            let prev_regs = prev_regs.unwrap_or(cur_regs);
+                                modifiers[idx].push('r');
+                            }
 
-                            let regs: Vec<_> = cur_regs
+                            for r in insn.map(|i| i.write.clone()).unwrap_or_default() {
+                                let idx = if let Some(idx) =
+                                    <STEP as state::Step<N>>::STATE::reg_idx(r)
+                                {
+                                    idx
+                                } else {
+                                    continue;
+                                };
+
+                                modifiers[idx].push('w');
+                            }
+
+                            let pairs: Vec<_> = cur_regs
                                 .iter()
-                                .zip(prev_regs)
-                                .map(|(cur, prev)| (cur, if cur == prev { "" } else { "w" }))
+                                .zip(modifiers)
+                                .map(|(cur, modi)| (cur, modi))
+                                .enumerate()
+                                .map(|(idx, (value, modifier))| {
+                                    let name = <STEP as state::Step<N>>::STATE::reg_name_idx(idx);
+                                    (name, value, modifier)
+                                })
                                 .collect();
-
-                            let pairs = regs.iter().enumerate().map(|(idx, (value, modifier))| {
-                                let name = <STEP as state::Step<N>>::STATE::reg_name_idx(idx);
-                                (name, value, modifier)
-                            });
-                            let pairs: Vec<_> = pairs.collect();
 
                             let serialized = serde_json::to_string(
                                 &json!({"registers": {"idx": idx, "registers": pairs}}),
