@@ -3,7 +3,7 @@ use std::str::FromStr;
 use super::{Branching, GenericState, GenericStep, Instrument, State, Step};
 use crate::{
     arch::Arch,
-    dis::{self, groups::Group},
+    dis::{self, groups::Group, regs::Reg},
 };
 use bitflags::bitflags;
 
@@ -104,12 +104,55 @@ impl State<32> for Aarch64State {
         &self.flags
     }
 
-    fn reg_name(i: usize) -> &'static str {
+    fn reg_name_idx(i: usize) -> &'static str {
         [
             "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13",
             "x14", "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25",
             "x26", "x27", "x28", "x29", "x30", "sp", "xzr",
         ][i]
+    }
+
+    fn reg_name(reg: Reg) -> Option<&'static str> {
+        let reg = reg.canonical();
+        let idx = match reg {
+            Reg::Aarch64Reg(v) => match v {
+                dis::regs::Aarch64Reg::X0 => 0,
+                dis::regs::Aarch64Reg::X1 => 1,
+                dis::regs::Aarch64Reg::X2 => 2,
+                dis::regs::Aarch64Reg::X3 => 3,
+                dis::regs::Aarch64Reg::X4 => 4,
+                dis::regs::Aarch64Reg::X5 => 5,
+                dis::regs::Aarch64Reg::X6 => 6,
+                dis::regs::Aarch64Reg::X7 => 7,
+                dis::regs::Aarch64Reg::X8 => 8,
+                dis::regs::Aarch64Reg::X9 => 9,
+                dis::regs::Aarch64Reg::X10 => 10,
+                dis::regs::Aarch64Reg::X11 => 11,
+                dis::regs::Aarch64Reg::X12 => 12,
+                dis::regs::Aarch64Reg::X13 => 13,
+                dis::regs::Aarch64Reg::X14 => 14,
+                dis::regs::Aarch64Reg::X15 => 15,
+                dis::regs::Aarch64Reg::X16 => 16,
+                dis::regs::Aarch64Reg::X17 => 17,
+                dis::regs::Aarch64Reg::X18 => 18,
+                dis::regs::Aarch64Reg::X19 => 19,
+                dis::regs::Aarch64Reg::X20 => 20,
+                dis::regs::Aarch64Reg::X21 => 21,
+                dis::regs::Aarch64Reg::X22 => 22,
+                dis::regs::Aarch64Reg::X23 => 23,
+                dis::regs::Aarch64Reg::X24 => 24,
+                dis::regs::Aarch64Reg::X25 => 25,
+                dis::regs::Aarch64Reg::X26 => 26,
+                dis::regs::Aarch64Reg::X27 => 27,
+                dis::regs::Aarch64Reg::X28 => 28,
+                dis::regs::Aarch64Reg::Fp => 29,
+                dis::regs::Aarch64Reg::Lr => 30,
+                _ => return None,
+            },
+            Reg::X64Reg(_) => return None,
+        };
+
+        Some(Self::reg_name_idx(idx))
     }
 }
 

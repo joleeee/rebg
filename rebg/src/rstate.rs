@@ -47,7 +47,7 @@ impl<const N: usize> StateDiff<N> {
             .collect::<Vec<_>>();
 
         for (i, a, b) in &diff_regs {
-            println!("{} <- {:x} (prev {:x})", S::reg_name(*i), b, a);
+            println!("{} <- {:x} (prev {:x})", S::reg_name_idx(*i), b, a);
         }
         if let RDiff::Changed { from: _, to } = self.pc {
             println!("pc <- {:x}", to);

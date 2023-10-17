@@ -276,7 +276,7 @@ impl Analyzer for TraceDumper {
                                 .collect();
 
                             let pairs = regs.iter().enumerate().map(|(idx, (value, modifier))| {
-                                let name = <STEP as state::Step<N>>::STATE::reg_name(idx);
+                                let name = <STEP as state::Step<N>>::STATE::reg_name_idx(idx);
                                 (name, value, modifier)
                             });
                             let pairs: Vec<_> = pairs.collect();

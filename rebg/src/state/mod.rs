@@ -11,7 +11,7 @@ pub use aarch64::{Aarch64Flags, Aarch64State, Aarch64Step};
 pub mod x64;
 pub use x64::{X64Flags, X64State, X64Step};
 
-use crate::{arch::Arch, dis};
+use crate::{arch::Arch, dis::{self, regs::Reg}};
 
 /// A single step in the trace.
 pub trait Step<const N: usize>: Clone + std::marker::Send + 'static {
@@ -36,7 +36,8 @@ pub trait State<const N: usize>: Clone {
     type FLAGS: Flags + Clone + Copy + fmt::Debug;
     fn pc(&self) -> u64;
     fn regs(&self) -> &[u64; N];
-    fn reg_name(i: usize) -> &'static str;
+    fn reg_name_idx(i: usize) -> &'static str;
+    fn reg_name(reg: Reg) -> Option<&'static str>;
     fn flags(&self) -> &Self::FLAGS;
 }
 

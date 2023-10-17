@@ -14,7 +14,7 @@ use crate::arch::Arch;
 use std::rc::Rc;
 use thiserror::Error;
 
-use self::groups::Group;
+use self::{groups::Group, regs::Reg};
 
 pub struct Dis {
     pub arch: Arch,
@@ -26,8 +26,8 @@ pub struct Instruction {
     pub address: u64,
 
     // registers used
-    pub read: Vec<capstone::RegId>,
-    pub write: Vec<capstone::RegId>,
+    pub read: Vec<Reg>,
+    pub write: Vec<Reg>,
 
     // string stuff
     pub mnemonic: Option<String>,
@@ -44,6 +44,8 @@ pub enum DisError {
     Capstone(#[from] capstone::Error),
     #[error("invalid groupid")]
     NoGroup(u8),
+    #[error("invalid regid")]
+    NoReg(u16),
 }
 
 impl Dis {
@@ -65,7 +67,15 @@ impl Dis {
             groups.push(Group::from_num(self.arch, id.0).ok_or(DisError::NoGroup(id.0))?);
         }
 
-        let (read, write) = self.cs.regs_access(insn).unwrap().unwrap();
+        let (read_ids, write_ids) = self.cs.regs_access(insn).unwrap().unwrap();
+        let mut read = Vec::new();
+        for id in read_ids {
+            read.push(Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0))?);
+        }
+        let mut write = Vec::new();
+        for id in write_ids {
+            write.push(Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0))?);
+        }
 
         Ok(Instruction {
             address: insn.address(),

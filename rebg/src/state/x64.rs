@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     arch::Arch,
-    dis::{self, groups::Group},
+    dis::{self, groups::Group, regs::Reg},
 };
 
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
@@ -104,11 +104,39 @@ impl State<16> for X64State {
         &self.flags
     }
 
-    fn reg_name(i: usize) -> &'static str {
+    fn reg_name_idx(i: usize) -> &'static str {
         [
             "rax", "rbx", "rcx", "rdx", "rbp", "rsp", "rsi", "rdi", "r8", "r9", "r10", "r11",
             "r12", "r13", "r14", "r15",
         ][i]
+    }
+
+    fn reg_name(reg: Reg) -> Option<&'static str> {
+        let reg = reg.canonical();
+        let idx = match reg {
+            Reg::Aarch64Reg(_) => return None,
+            Reg::X64Reg(v) => match v {
+                dis::regs::X64Reg::Rax => 0,
+                dis::regs::X64Reg::Rbx => 1,
+                dis::regs::X64Reg::Rcx => 2,
+                dis::regs::X64Reg::Rdx => 3,
+                dis::regs::X64Reg::Rbp => 4,
+                dis::regs::X64Reg::Rsp => 5,
+                dis::regs::X64Reg::Rsi => 6,
+                dis::regs::X64Reg::Rdi => 7,
+                dis::regs::X64Reg::R8 => 8,
+                dis::regs::X64Reg::R9 => 9,
+                dis::regs::X64Reg::R10 => 10,
+                dis::regs::X64Reg::R11 => 11,
+                dis::regs::X64Reg::R12 => 12,
+                dis::regs::X64Reg::R13 => 13,
+                dis::regs::X64Reg::R14 => 14,
+                dis::regs::X64Reg::R15 => 15,
+                _ => return None,
+            },
+        };
+
+        Some(Self::reg_name_idx(idx))
     }
 }
 
