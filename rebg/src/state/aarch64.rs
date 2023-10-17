@@ -112,9 +112,9 @@ impl State<32> for Aarch64State {
         ][i]
     }
 
-    fn reg_name(reg: Reg) -> Option<&'static str> {
+    fn reg_idx(reg: Reg) -> Option<usize> {
         let reg = reg.canonical();
-        let idx = match reg {
+        Some(match reg {
             Reg::Aarch64Reg(v) => match v {
                 dis::regs::Aarch64Reg::X0 => 0,
                 dis::regs::Aarch64Reg::X1 => 1,
@@ -150,8 +150,11 @@ impl State<32> for Aarch64State {
                 _ => return None,
             },
             Reg::X64Reg(_) => return None,
-        };
+        })
+    }
 
+    fn reg_name(reg: Reg) -> Option<&'static str> {
+        let idx = Self::reg_idx(reg)?;
         Some(Self::reg_name_idx(idx))
     }
 }

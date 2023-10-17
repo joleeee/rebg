@@ -36,6 +36,7 @@ pub trait State<const N: usize>: Clone {
     type FLAGS: Flags + Clone + Copy + fmt::Debug;
     fn pc(&self) -> u64;
     fn regs(&self) -> &[u64; N];
+    fn reg_idx(reg: Reg) -> Option<usize>;
     fn reg_name_idx(i: usize) -> &'static str;
     fn reg_name(reg: Reg) -> Option<&'static str>;
     fn flags(&self) -> &Self::FLAGS;
