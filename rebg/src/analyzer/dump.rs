@@ -35,7 +35,6 @@ impl Analyzer for TraceDumper {
     ) where
         STEP: Step<N> + std::fmt::Debug,
         // for inferance
-        // LAUNCHER: Host + std::fmt::Debug,
         LAUNCHER: Host,
         <LAUNCHER as Host>::Error: std::fmt::Debug,
         TRACER: crate::tracer::Tracer<STEP, N, ITER = ITER>,
