@@ -14,6 +14,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::json;
+use std::cell::RefCell;
 use std::net::TcpListener;
 use std::rc::Rc;
 use std::{
@@ -72,7 +73,10 @@ impl Analyzer for TraceDumper {
         // merge into a single table
         let table = symbol_tables
             .into_iter()
-            .reduce(|accum, item| accum.push_table(item))
+            .reduce(|mut accum, item| {
+                accum.push_table(item);
+                accum
+            })
             .unwrap();
 
         let mut trace = Vec::new();
@@ -98,6 +102,8 @@ impl Analyzer for TraceDumper {
             }
         };
 
+        let table = Rc::new(RefCell::new(table));
+        // analyzer will insert new symbols into table
         let mut analyzer = RealAnalyzer::new(dis, arch, table.clone());
 
         // we want changes to instantly show up in the UI, but we are also
@@ -135,7 +141,8 @@ impl Analyzer for TraceDumper {
                             bt.push(*return_address);
 
                             let sym_txt = {
-                                let sym = analyzer.syms.lookup(*target);
+                                let syms = analyzer.syms.borrow();
+                                let sym = syms.lookup(*target);
                                 if let Some(sym) = sym {
                                     format!(" = <{}>", sym)
                                 } else {
@@ -198,7 +205,7 @@ impl Analyzer for TraceDumper {
             let trace = trace.clone();
             let instrumentations = instrumentations.clone();
             let bt_lens = bt_lens.clone();
-            let table = table.clone();
+            let table = (*table).clone();
             std::thread::spawn(move || {
                 // first send all addresses etc
                 let mut ws = accept(stream.unwrap()).unwrap();
@@ -216,7 +223,7 @@ impl Analyzer for TraceDumper {
                     let mut parts = Vec::new();
 
                     for (((i, step), instru), bt_len) in chunk {
-                        let symbolized = if let Some(s) = table.lookup(step.state().pc()) {
+                        let symbolized = if let Some(s) = table.borrow().lookup(step.state().pc()) {
                             format!("{}", s)
                         } else {
                             "".to_string()
@@ -512,7 +519,7 @@ where
 {
     hist: Vec<STEP::STATE>,
     dis: Dis,
-    syms: SymbolTable,
+    syms: Rc<RefCell<SymbolTable>>,
     arch: Arch,
     syscall_state: SyscallState,
 }
@@ -521,7 +528,7 @@ impl<STEP, const N: usize> RealAnalyzer<STEP, N>
 where
     STEP: Step<N>,
 {
-    fn new(dis: Dis, arch: Arch, syms: SymbolTable) -> Self {
+    fn new(dis: Dis, arch: Arch, syms: Rc<RefCell<SymbolTable>>) -> Self {
         Self {
             hist: Vec::new(),
             dis,
@@ -548,9 +555,10 @@ where
         let code = step.code();
 
         let insn = self.dis.disassemble_one(code, address).unwrap();
-        let op = inst_to_str(&insn, Some(&self.syms));
+        let op = inst_to_str(&insn, Some(&self.syms.borrow()));
 
-        let symbol = self.syms.lookup(address);
+        let syms = self.syms.borrow();
+        let symbol = syms.lookup(address);
 
         let location = if let Some(ref symbol) = symbol {
             let symbol = format!("<{}>", symbol);
@@ -558,6 +566,8 @@ where
         } else {
             format!("0x{:016x}", address)
         };
+
+        drop(syms);
 
         println!("{}: {}", location, op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
@@ -618,7 +628,7 @@ where
                         // TODO size
                         new_symbol_table = new_symbol_table.add_offset(addr);
 
-                        self.syms = self.syms.clone().push_table(new_symbol_table);
+                        self.syms.borrow_mut().push_table(new_symbol_table);
                     }
                 }
                 Ok(Some(StateUpdate::Munmap { addr: _, size: _ })) => {
