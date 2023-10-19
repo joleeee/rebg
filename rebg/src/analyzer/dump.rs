@@ -1,4 +1,5 @@
 use super::Analyzer;
+use crate::binary::Binary;
 use crate::dis::{self, Dis, Instruction};
 use crate::state::{self, Branching, Instrument};
 use crate::{
@@ -35,6 +36,7 @@ impl Analyzer for TraceDumper {
     ) where
         STEP: Step<N> + std::fmt::Debug,
         // for inferance
+        // LAUNCHER: Host + std::fmt::Debug,
         LAUNCHER: Host,
         <LAUNCHER as Host>::Error: std::fmt::Debug,
         TRACER: crate::tracer::Tracer<STEP, N, ITER = ITER>,
@@ -59,11 +61,10 @@ impl Analyzer for TraceDumper {
         // get symbol table from all binaries
         let mut symbol_tables = Vec::new();
         for path in offsets.keys() {
-            let contents = launcher.read_file(&PathBuf::from(path)).unwrap();
-            let elf = goblin::elf::Elf::parse(&contents).unwrap();
+            let binary = Binary::from_path(launcher, &PathBuf::from(path)).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let table = SymbolTable::from_elf(path.clone(), &elf).add_offset(pie.0);
+            let table = SymbolTable::from_elf(path.clone(), binary.elf()).add_offset(pie.0);
 
             // TODO also add debug symbols if they are missing from the binary itself
 
