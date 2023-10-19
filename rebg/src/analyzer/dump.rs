@@ -63,27 +63,19 @@ impl Analyzer for TraceDumper {
             let binary = Binary::from_path(launcher, &PathBuf::from(path)).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let mut table = SymbolTable::from_elf(path.clone(), binary.elf());//.add_offset(pie.0);
+            let mut table = SymbolTable::from_elf(path.clone(), binary.elf());
 
             if binary.elf().syms.is_empty() {
-                let build_id = binary.build_id();
-                if let Some(build_id) = build_id {
-                    let debug_binary = Binary::try_from_buildid(launcher, &build_id, arch);
-                    if let Some(debug_binary) = debug_binary {
-                        println!("PRE {}", table.symbols.len());
-                        table = table.extend_with_debug(
-                            debug_binary.elf(),
-                            0,
-                            pie.1 - pie.0,
-                        );
-                        println!("POST {}", table.symbols.len());
-                    }
+                let debug_binary = binary
+                    .build_id()
+                    .and_then(|id| Binary::try_from_buildid(launcher, &id, arch));
+
+                if let Some(debug_binary) = debug_binary {
+                    table = table.extend_with_debug(debug_binary.elf(), 0, pie.1 - pie.0);
                 }
             }
 
             table = table.add_offset(pie.0);
-
-            // TODO also add debug symbols if they are missing from the binary itself
 
             symbol_tables.push(table);
         }
@@ -539,7 +531,7 @@ where
                     println!("MEMMMM");
 
                     if let Ok(binary) = binary {
-                        let mut new_symbol_table = SymbolTable::from_elf(path, &binary.elf());
+                        let mut new_symbol_table = SymbolTable::from_elf(path, binary.elf());
 
                         if binary.elf().syms.is_empty() {
                             eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
