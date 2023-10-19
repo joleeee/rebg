@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::host::Host;
+use crate::{arch::Arch, host::Host};
 
 use self::box_ptr::BoxData;
 
@@ -25,6 +25,10 @@ mod box_ptr {
 
         pub(super) fn as_ptr(&self) -> *const [u8] {
             self.inner.as_ptr()
+        }
+
+        pub(super) fn as_slice(&self) -> &[u8] {
+            unsafe { &*self.inner.as_ptr() }
         }
     }
 
@@ -58,7 +62,7 @@ pub struct Binary<'a> {
 }
 
 impl<'a> Binary<'a> {
-    /// Reads and parses the binary, adds external debug symbols if needed
+    /// Reads and parses the binary
     pub fn from_path<LAUNCHER>(
         launcher: &LAUNCHER,
         path: &Path,
@@ -74,8 +78,64 @@ impl<'a> Binary<'a> {
 
         let elf = goblin::elf::Elf::parse(unsafe { &*raw.as_ptr() })?;
 
-        // Ok(Binary { raw, elf })
         Ok(Binary { raw, elf })
+    }
+
+    /// Tries finding an elf with debug symbols for this buildid
+    pub fn try_from_buildid<LAUNCHER>(
+        launcher: &LAUNCHER,
+        buildid: &str,
+        arch: Arch,
+    ) -> Option<Binary<'a>>
+    where
+        LAUNCHER: Host,
+        <LAUNCHER as Host>::Error: std::fmt::Debug,
+    {
+        let prefix = &buildid[..2];
+        let suffix = &buildid[2..];
+        for platform in [
+            "/usr/lib/debug/.build-id",
+            "/usr/x86_64-linux-gnu/lib/debug/.build-id",
+            "/usr/aarch64-linux-gnu/lib/debug/.build-id",
+        ] {
+            let debug_sym_path = format!("{platform}/{prefix}/{suffix}.debug",);
+
+            println!("Trying {}", debug_sym_path);
+
+            let bin = Self::from_path(launcher, &PathBuf::from(&debug_sym_path));
+
+            if let Ok(bin) = bin {
+                let bin_arch = Arch::from_elf(bin.elf().header.e_machine).ok();
+
+                if bin_arch != Some(arch) {
+                    println!("wrong arch {:?}", bin_arch);
+                    continue;
+                }
+
+                return Some(bin);
+            } else {
+                continue;
+            }
+        }
+
+        None
+    }
+
+    pub fn build_id(&self) -> Option<String> {
+        let buildid = self
+            .elf
+            .section_headers
+            .iter()
+            .find(|s| self.elf.shdr_strtab.get_at(s.sh_name) == Some(".note.gnu.build-id"))?;
+
+        let buildid = {
+            let id = &self.raw.as_slice()[buildid.file_range()?];
+            // only use the last 20 bytes!!
+            let id = &id[id.len() - 20..];
+            hex::encode(id)
+        };
+
+        Some(buildid)
     }
 
     pub fn elf(&self) -> &goblin::elf::Elf {

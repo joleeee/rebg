@@ -10,7 +10,6 @@ use crate::{
     syms::SymbolTable,
     tracer::ParsedStep,
 };
-use goblin::elf::Elf;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -64,7 +63,25 @@ impl Analyzer for TraceDumper {
             let binary = Binary::from_path(launcher, &PathBuf::from(path)).unwrap();
 
             let pie = offsets.get(path).unwrap();
-            let table = SymbolTable::from_elf(path.clone(), binary.elf()).add_offset(pie.0);
+            let mut table = SymbolTable::from_elf(path.clone(), binary.elf());//.add_offset(pie.0);
+
+            if binary.elf().syms.is_empty() {
+                let build_id = binary.build_id();
+                if let Some(build_id) = build_id {
+                    let debug_binary = Binary::try_from_buildid(launcher, &build_id, arch);
+                    if let Some(debug_binary) = debug_binary {
+                        println!("PRE {}", table.symbols.len());
+                        table = table.extend_with_debug(
+                            debug_binary.elf(),
+                            0,
+                            pie.1 - pie.0,
+                        );
+                        println!("POST {}", table.symbols.len());
+                    }
+                }
+            }
+
+            table = table.add_offset(pie.0);
 
             // TODO also add debug symbols if they are missing from the binary itself
 
@@ -448,65 +465,6 @@ impl SyscallState {
     }
 }
 
-fn find_debug_elf<LAUNCHER>(launcher: &LAUNCHER, buildid: &str, arch: Arch) -> Option<Vec<u8>>
-where
-    LAUNCHER: Host,
-    <LAUNCHER as Host>::Error: std::fmt::Debug,
-{
-    let prefix = &buildid[..2];
-    let suffix = &buildid[2..];
-
-    for platform in [
-        "/usr/lib/debug/.build-id",
-        "/usr/x86_64-linux-gnu/lib/debug/.build-id",
-        "/usr/aarch64-linux-gnu/lib/debug/.build-id",
-    ] {
-        let debug_sym_path = format!("{platform}/{prefix}/{suffix}.debug",);
-
-        println!("Trying {}", debug_sym_path);
-
-        let debug_sym = match launcher.read_file(&PathBuf::from(&debug_sym_path)) {
-            Ok(x) => x,
-            Err(e) => {
-                println!("nope {:?}", e);
-                continue;
-            }
-        };
-
-        let elf = match Elf::parse(&debug_sym) {
-            Ok(x) => x,
-            Err(e) => {
-                println!("cant read elf {:?}", e);
-                continue;
-            }
-        };
-
-        let dbg_arch = match Arch::from_elf(elf.header.e_machine) {
-            Ok(x) => x,
-            Err(e) => {
-                println!("cant read arch {:?}", e);
-                continue;
-            }
-        };
-
-        if dbg_arch != arch {
-            println!("wrong arch {:?}", dbg_arch);
-            continue;
-        }
-
-        println!(
-            "Found {} {:?} with {}",
-            debug_sym_path,
-            dbg_arch,
-            elf.syms.len()
-        );
-
-        return Some(debug_sym);
-    }
-
-    None
-}
-
 struct RealAnalyzer<STEP, const N: usize>
 where
     STEP: Step<N>,
@@ -576,39 +534,25 @@ where
                     offset,
                     size,
                 })) => {
-                    let contents = launcher.read_file(Path::new(&path)).unwrap();
-
-                    let elf = Elf::parse(&contents);
+                    let binary = Binary::from_path(launcher, Path::new(&path));
 
                     println!("MEMMMM");
 
-                    if let Ok(elf) = elf {
-                        let mut new_symbol_table = SymbolTable::from_elf(path, &elf);
+                    if let Ok(binary) = binary {
+                        let mut new_symbol_table = SymbolTable::from_elf(path, &binary.elf());
 
-                        if elf.syms.is_empty() {
+                        if binary.elf().syms.is_empty() {
                             eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
 
-                            let buildid = elf
-                                .section_headers
-                                .iter()
-                                .find(|s| {
-                                    elf.shdr_strtab.get_at(s.sh_name) == Some(".note.gnu.build-id")
-                                })
-                                .unwrap();
+                            let buildid = binary.build_id();
 
-                            let buildid = {
-                                let id = &contents[buildid.file_range().unwrap()];
-                                // only use the last 20 bytes!!
-                                let id = &id[id.len() - 20..];
-                                hex::encode(id)
-                            };
+                            if let Some(buildid) = buildid {
+                                let other_bin =
+                                    Binary::try_from_buildid(launcher, &buildid, self.arch);
 
-                            let bin = find_debug_elf(launcher, &buildid, self.arch);
-                            if let Some(bin) = bin {
-                                let bin = Elf::parse(&bin).ok();
-                                if let Some(bin) = bin {
+                                if let Some(other_bin) = other_bin {
                                     new_symbol_table = new_symbol_table.extend_with_debug(
-                                        &bin,
+                                        other_bin.elf(),
                                         offset,
                                         offset + size,
                                     );
