@@ -3,6 +3,7 @@
 
 pub mod analyzer;
 pub mod arch;
+pub mod binary;
 pub mod dis;
 pub mod host;
 pub mod rstate;
