@@ -646,6 +646,13 @@ impl Reg {
             Reg::X64Reg(r) => Reg::X64Reg(r.canonical()),
         }
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Reg::Aarch64Reg(r) => r.as_str(),
+            Reg::X64Reg(r) => r.as_str(),
+        }
+    }
 }
 
 #[cfg(test)]

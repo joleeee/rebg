@@ -135,10 +135,6 @@ impl State<16> for X64State {
             },
         })
     }
-
-    fn reg_name(reg: Reg) -> Option<&'static str> {
-        Some(Self::reg_name_idx(Self::reg_idx(reg)?))
-    }
 }
 
 impl X64State {

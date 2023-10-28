@@ -152,11 +152,6 @@ impl State<32> for Aarch64State {
             Reg::X64Reg(_) => return None,
         })
     }
-
-    fn reg_name(reg: Reg) -> Option<&'static str> {
-        let idx = Self::reg_idx(reg)?;
-        Some(Self::reg_name_idx(idx))
-    }
 }
 
 impl FromStr for Aarch64State {

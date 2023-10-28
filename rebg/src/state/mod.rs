@@ -38,7 +38,6 @@ pub trait State<const N: usize>: Clone {
     fn regs(&self) -> &[u64; N];
     fn reg_idx(reg: Reg) -> Option<usize>;
     fn reg_name_idx(i: usize) -> &'static str;
-    fn reg_name(reg: Reg) -> Option<&'static str>;
     fn flags(&self) -> &Self::FLAGS;
 }
 
