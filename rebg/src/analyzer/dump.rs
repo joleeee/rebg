@@ -271,7 +271,7 @@ impl Analyzer for TraceDumper {
                             let cur_regs = step.state().regs();
 
                             // with markings based on what happen from the PREV step
-                            let insn = insns.iter().nth(idx as usize);
+                            let insn = insns.get(idx as usize);
                             let mut modifiers = vec![String::new(); cur_regs.len()];
 
                             for r in insn.map(|i| i.read.clone()).unwrap_or_default() {
