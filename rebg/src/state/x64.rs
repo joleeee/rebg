@@ -22,10 +22,10 @@ use capstone::{
 #[derive(Clone, Debug)]
 pub struct X64Step {
     state: X64State,
-    code: Vec<u8>,
+    code: Box<[u8]>,
     address: u64,
-    strace: Option<String>,
-    memory_ops: Vec<MemoryOp>,
+    strace: Option<Box<str>>,
+    memory_ops: Box<[MemoryOp]>,
 }
 
 impl Step<16> for X64Step {
@@ -47,8 +47,8 @@ impl Step<16> for X64Step {
         self.address
     }
 
-    fn strace(&self) -> Option<&String> {
-        self.strace.as_ref()
+    fn strace(&self) -> Option<&str> {
+        self.strace.as_deref()
     }
 
     fn memory_ops(&self) -> &[super::MemoryOp] {
@@ -162,10 +162,10 @@ impl TryFrom<&[String]> for X64Step {
 
         Ok(Self {
             state: generic.state,
-            code: generic.code,
+            code: generic.code.into_boxed_slice(),
             address: generic.address,
-            strace: generic.strace,
-            memory_ops: generic.memory_ops,
+            strace: generic.strace.map(|x| x.into_boxed_str()),
+            memory_ops: generic.memory_ops.into_boxed_slice(),
         })
     }
 }
