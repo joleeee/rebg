@@ -62,6 +62,12 @@ pub struct Binary<'a> {
 }
 
 impl<'a> Binary<'a> {
+    pub fn from_bytes(bytes: Box<[u8]>) -> Result<Binary<'a>, goblin::error::Error> {
+        let raw = BoxData::from_box(bytes);
+        let elf = goblin::elf::Elf::parse(unsafe { &*raw.as_ptr() })?;
+        Ok(Binary { raw, elf })
+    }
+
     /// Reads and parses the binary
     pub fn from_path<LAUNCHER>(
         launcher: &LAUNCHER,
@@ -71,14 +77,12 @@ impl<'a> Binary<'a> {
         LAUNCHER: Host,
         <LAUNCHER as Host>::Error: std::fmt::Debug,
     {
-        let raw = launcher.read_file(path).map_err(BinaryError::Launcher)?;
+        let raw = launcher
+            .read_file(path)
+            .map_err(BinaryError::Launcher)?
+            .into_boxed_slice();
 
-        let raw = raw.into_boxed_slice();
-        let raw = BoxData::from_box(raw);
-
-        let elf = goblin::elf::Elf::parse(unsafe { &*raw.as_ptr() })?;
-
-        Ok(Binary { raw, elf })
+        Ok(Self::from_bytes(raw)?)
     }
 
     /// Tries finding an elf with debug symbols for this buildid

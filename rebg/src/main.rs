@@ -1,5 +1,6 @@
 use rebg::analyzer::dump::TraceDumper;
 use rebg::analyzer::Analyzer;
+use rebg::binary::Binary;
 use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
 use rebg::state::{Aarch64Step, Step, X64Step};
@@ -79,9 +80,12 @@ fn main() {
         launcher,
     } = argh::from_env();
 
-    let buffer = fs::read(&program).unwrap();
-    let elf = goblin::elf::Elf::parse(&buffer).unwrap();
-    let target_arch = target_arch.unwrap_or_else(|| Arch::from_elf(elf.header.e_machine).unwrap());
+    let bin = {
+        let buffer = fs::read(&program).unwrap();
+        Binary::from_bytes(buffer.into_boxed_slice()).unwrap()
+    };
+    let target_arch =
+        target_arch.unwrap_or_else(|| Arch::from_elf(bin.elf().header.e_machine).unwrap());
 
     let qemu = QEMU {};
 
