@@ -69,14 +69,16 @@ impl Dis {
         }
 
         let (read_ids, write_ids) = self.cs.regs_access(insn).unwrap().unwrap();
-        let mut read = Vec::new();
-        for id in read_ids {
-            read.push(Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0))?);
-        }
-        let mut write = Vec::new();
-        for id in write_ids {
-            write.push(Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0))?);
-        }
+
+        let read: Vec<Reg> = read_ids
+            .iter()
+            .map(|id| Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0)))
+            .collect::<Result<_, _>>()?;
+
+        let write: Vec<Reg> = write_ids
+            .iter()
+            .map(|id| Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0)))
+            .collect::<Result<_, _>>()?;
 
         Ok(Instruction {
             address: insn.address(),
