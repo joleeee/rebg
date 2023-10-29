@@ -208,12 +208,15 @@ impl TraceDumper {
         assert_eq!(trace.len(), instrumentations.len());
         assert_eq!(trace.len(), bt_lens.len());
 
+        let table = table.borrow();
+        let table = table.clone();
+
         Analysis {
             trace,
             insns,
             instrumentations,
             bt_lens,
-            table: (*table).clone(),
+            table,
         }
     }
 }

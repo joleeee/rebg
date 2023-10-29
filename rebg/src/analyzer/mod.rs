@@ -7,7 +7,7 @@ use crate::{
     syms::SymbolTable,
     tracer::{ParsedStep, Tracer},
 };
-use std::{cell::RefCell, fmt};
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub struct Analysis<STEP, const N: usize>
@@ -18,7 +18,7 @@ where
     pub insns: Vec<Instruction>,
     pub instrumentations: Vec<Instrumentation>,
     pub bt_lens: Vec<usize>,
-    pub table: RefCell<SymbolTable>,
+    pub table: SymbolTable,
 }
 
 pub trait Analyzer {

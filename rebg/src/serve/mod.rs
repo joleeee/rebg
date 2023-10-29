@@ -12,23 +12,24 @@ use tungstenite::{accept, WebSocket};
 
 pub fn ws<STEP, const N: usize>(analysis: Analysis<STEP, N>, arch: Arch)
 where
-    STEP: Step<N> + fmt::Debug,
+    STEP: Step<N> + fmt::Debug + std::marker::Sync,
 {
     let server = TcpListener::bind("127.0.0.1:9001").unwrap();
 
-    for stream in server.incoming() {
-        if let Ok(stream) = stream {
-            if let Ok(ws) = accept(stream) {
-                let analysis = analysis.clone();
-                std::thread::spawn(move || handle(ws, analysis, arch));
+    std::thread::scope(|s| {
+        for stream in server.incoming() {
+            if let Ok(stream) = stream {
+                if let Ok(ws) = accept(stream) {
+                    s.spawn(|| handle(ws, &analysis, arch));
+                }
             }
         }
-    }
+    });
 }
 
 fn handle<STEP, const N: usize>(
     mut ws: WebSocket<TcpStream>,
-    analysis: Analysis<STEP, N>,
+    analysis: &Analysis<STEP, N>,
     arch: Arch,
 ) where
     STEP: Step<N> + fmt::Debug,
@@ -55,7 +56,7 @@ fn handle<STEP, const N: usize>(
         let mut parts = Vec::new();
 
         for (((i, step), instru), bt_len) in chunk {
-            let symbolized = if let Some(s) = table.borrow().lookup(step.state().pc()) {
+            let symbolized = if let Some(s) = table.lookup(step.state().pc()) {
                 format!("{}", s)
             } else {
                 "".to_string()
