@@ -64,11 +64,11 @@ fn handle<STEP, const N: usize>(
         let mut parts = Vec::new();
 
         for (((i, step), instru), bt_len) in chunk {
-            let symbolized = if let Some(s) = table.lookup(step.state().pc()) {
-                format!("{}", s)
-            } else {
-                "".to_string()
-            };
+            let symbolized = table
+                .lookup(step.state().pc())
+                .map(|sy| sy.to_string())
+                .unwrap_or("".to_string());
+
             parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len, "s": symbolized}));
         }
 
