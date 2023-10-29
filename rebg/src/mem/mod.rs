@@ -107,6 +107,25 @@ impl HistMem {
         Some(lower | upper)
     }
 
+    pub fn load32(&self, tick: u32, address: u64) -> Option<u32> {
+        let adr_lower = Self::align_down(address);
+        let adr_upper = Self::align_down(address + 3);
+
+        let upper_len = address - adr_lower;
+        let lower_len = 8 - upper_len;
+
+        let lower = self.load64aligned(tick, adr_lower)?;
+        let upper = self.load64aligned(tick, adr_upper)?;
+
+        let lower = lower & Self::get_lower_bitmask(lower_len);
+        let upper = upper & Self::get_upper_bitmask(upper_len);
+
+        let combined = lower | upper;
+        let combined = (combined >> 32) as u32;
+
+        Some(combined)
+    }
+
     pub fn load8(&self, tick: u32, address: u64) -> Option<u8> {
         let adr_lower = Self::align_down(address);
         let offset = address - adr_lower;
@@ -170,16 +189,30 @@ mod tests {
         v.store64aligned(TICK, 0, 0x1111111111111111).unwrap();
         v.store64aligned(TICK, 8, 0x2222222222222222).unwrap();
 
-        for a in 0..=8 {
-            println!("{:02x}: {:016x}", a, v.load64(TICK, a).unwrap());
-        }
-
         // u64
+        for a in 0..=8 {
+            println!("64 {:02x}: {:016x}", a, v.load64(TICK, a).unwrap());
+        }
         assert_eq!(v.load64(TICK, 0), Some(0x1111111111111111));
         assert_eq!(v.load64(TICK, 1), Some(0x1111111111111122));
         assert_eq!(v.load64(TICK, 7), Some(0x1122222222222222));
         assert_eq!(v.load64(TICK, 8), Some(0x2222222222222222));
         assert_eq!(v.load64(TICK, 9), None);
+
+        // u32
+        println!("");
+        for a in 0..10 {
+            println!("32 {:02x}: {:08x}", a, v.load32(TICK, a).unwrap());
+        }
+        assert_eq!(v.load32(TICK, 0), Some(0x11111111));
+        assert_eq!(v.load32(TICK, 4), Some(0x11111111));
+        assert_eq!(v.load32(TICK, 5), Some(0x11111122));
+        assert_eq!(v.load32(TICK, 6), Some(0x11112222));
+        assert_eq!(v.load32(TICK, 7), Some(0x11222222));
+        assert_eq!(v.load32(TICK, 8), Some(0x22222222));
+        assert_eq!(v.load32(TICK, 9), Some(0x22222222));
+        assert_eq!(v.load32(TICK, 12), Some(0x22222222));
+        assert_eq!(v.load32(TICK, 13), None);
 
         // u8
         for a in 0..8 {
