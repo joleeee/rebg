@@ -14,6 +14,10 @@ pub struct MCell {
 }
 
 impl MCell {
+    fn new() -> Self {
+        Self { values: Vec::new() }
+    }
+
     fn add_tick(&mut self, tick: u32, value: u64) -> Result<(), ()> {
         if Some(tick) <= self.values.last().map(|x| x.0) {
             return Err(());
@@ -41,6 +45,13 @@ pub struct HistMem {
 }
 
 impl HistMem {
+    #[allow(dead_code)]
+    fn new() -> Self {
+        Self {
+            cells: HashMap::new(),
+        }
+    }
+
     fn align_down(address: u64) -> u64 {
         const SHIFT: usize = 3; // 2**3 = 8
         (address >> SHIFT) << SHIFT
@@ -102,7 +113,7 @@ impl HistMem {
 
     pub fn store64aligned(&mut self, tick: u32, address: u64, v: u64) -> Result<(), ()> {
         if !self.cells.contains_key(&address) {
-            self.cells.insert(address, MCell { values: vec![] });
+            self.cells.insert(address, MCell::new());
         }
 
         let cell = self.cells.get_mut(&address).expect("logic error");
@@ -114,7 +125,6 @@ impl HistMem {
 #[cfg(test)]
 mod tests {
     use crate::mem::HistMem;
-    use std::collections::HashMap;
 
     use super::MCell;
 
@@ -149,9 +159,7 @@ mod tests {
             assert_eq!(HistMem::align_down(a), 8);
         }
 
-        let mut v = HistMem {
-            cells: HashMap::new(),
-        };
+        let mut v = HistMem::new();
 
         v.store64aligned(TICK, 0, 0x1111111111111111).unwrap();
         v.store64aligned(TICK, 8, 0x2222222222222222).unwrap();
