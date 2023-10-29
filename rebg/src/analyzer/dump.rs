@@ -275,9 +275,7 @@ impl Analyzer for TraceDumper {
                             let mut modifiers = vec![String::new(); cur_regs.len()];
 
                             for r in insn.map(|i| i.read.clone()).unwrap_or_default() {
-                                let idx = if let Some(idx) =
-                                    <STEP as state::Step<N>>::STATE::reg_idx(r)
-                                {
+                                let idx = if let Some(idx) = r.idx() {
                                     idx
                                 } else {
                                     continue;
@@ -287,9 +285,7 @@ impl Analyzer for TraceDumper {
                             }
 
                             for r in insn.map(|i| i.write.clone()).unwrap_or_default() {
-                                let idx = if let Some(idx) =
-                                    <STEP as state::Step<N>>::STATE::reg_idx(r)
-                                {
+                                let idx = if let Some(idx) = r.idx() {
                                     idx
                                 } else {
                                     continue;

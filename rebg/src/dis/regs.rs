@@ -10,32 +10,32 @@ macro_rules! enum_from_pairs {
         }
 
         impl $name {
-            fn from_num(num: u16) -> Option<Self> {
+            pub fn from_num(num: u16) -> Option<Self> {
                 match num {
                     $( $num => Some($name::$s), )*
                     _ => None
                 }
             }
 
-            fn as_str(&self) -> &'static str {
+            pub fn as_str(&self) -> &'static str {
                 match self {
                     $( $name::$s => $str, )*
                 }
             }
 
-            fn canonical(&self) -> Self {
+            pub fn canonical(&self) -> Self {
                 match self {
                     $( $name::$s => $name::$parent, )*
                 }
             }
 
-            fn idx(&self) -> Option<usize> {
+            pub fn idx(&self) -> Option<usize> {
                 match self {
                     $( $name::$s => $idx, )*
                 }
             }
 
-            fn from_idx(i: usize) -> Option<Self> {
+            pub fn from_idx(i: usize) -> Option<Self> {
                 $(
                     if Some(i) == $idx {
                         return Some($name::$s);
@@ -668,12 +668,24 @@ impl Reg {
             Reg::X64Reg(r) => r.as_str(),
         }
     }
+
+    pub fn from_idx(arch: Arch, i: usize) -> Option<Self> {
+        Some(match arch {
+            Arch::ARM64 => Reg::Aarch64Reg(Aarch64Reg::from_idx(i)?),
+            Arch::X86_64 => Reg::X64Reg(X64Reg::from_idx(i)?),
+        })
+    }
+
+    pub fn idx(&self) -> Option<usize> {
+        match self {
+            Reg::Aarch64Reg(r) => r.idx(),
+            Reg::X64Reg(r) => r.idx(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use capstone::RegId;
     #[allow(unused_imports)]
     use convert_case::Casing;

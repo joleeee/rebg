@@ -103,52 +103,25 @@ impl State<16> for X64State {
 
     fn reg_name_idx(i: usize) -> &'static str {
         // no cure why the order is so fucked
-        // TODO fix this in a much better way :^)
         [
             "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11",
             "r12", "r13", "r14", "r15",
         ][i]
     }
-
-    fn reg_idx(reg: Reg) -> Option<usize> {
-        let reg = reg.canonical();
-        Some(match reg {
-            Reg::Aarch64Reg(_) => return None,
-            Reg::X64Reg(v) => match v {
-                dis::regs::X64Reg::Rax => 0,
-                dis::regs::X64Reg::Rbx => 3, // ??
-                dis::regs::X64Reg::Rcx => 1, // ??
-                dis::regs::X64Reg::Rdx => 2, // ??
-                dis::regs::X64Reg::Rbp => 5, // ??
-                dis::regs::X64Reg::Rsp => 4, // ??
-                dis::regs::X64Reg::Rsi => 6,
-                dis::regs::X64Reg::Rdi => 7,
-                dis::regs::X64Reg::R8 => 8,
-                dis::regs::X64Reg::R9 => 9,
-                dis::regs::X64Reg::R10 => 10,
-                dis::regs::X64Reg::R11 => 11,
-                dis::regs::X64Reg::R12 => 12,
-                dis::regs::X64Reg::R13 => 13,
-                dis::regs::X64Reg::R14 => 14,
-                dis::regs::X64Reg::R15 => 15,
-                _ => return None,
-            },
-        })
-    }
 }
 
 impl X64State {
-    // Currently a best effort, only the normal register, only r prefix (ex. no eax)
     fn read_reg(&self, reg_id: RegId) -> Option<u64> {
         let reg = Reg::from_num(Arch::X86_64, reg_id.0)?;
+
+        // eax -> rax, w0 -> x0
+        let reg = reg.canonical();
 
         if matches!(reg, Reg::X64Reg(X64Reg::Rip)) {
             return Some(self.pc);
         }
 
-        let idx = Self::reg_idx(reg)?;
-
-        Some(self.regs[idx])
+        Some(self.regs[reg.idx()?])
     }
 }
 

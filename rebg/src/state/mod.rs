@@ -13,7 +13,7 @@ pub use x64::{X64Flags, X64State, X64Step};
 
 use crate::{
     arch::Arch,
-    dis::{self, regs::Reg},
+    dis::{self},
 };
 
 /// A single step in the trace.
@@ -39,7 +39,6 @@ pub trait State<const N: usize>: Clone {
     type FLAGS: Flags + Clone + Copy + fmt::Debug;
     fn pc(&self) -> u64;
     fn regs(&self) -> &[u64; N];
-    fn reg_idx(reg: Reg) -> Option<usize>;
     fn reg_name_idx(i: usize) -> &'static str;
     fn flags(&self) -> &Self::FLAGS;
 }
