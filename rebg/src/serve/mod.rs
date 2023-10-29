@@ -82,12 +82,12 @@ fn handle<STEP, const N: usize>(
 
         let msg = match msg {
             tungstenite::Message::Text(text) => text,
-            tungstenite::Message::Ping(_p) => {
-                ws.send(tungstenite::Message::Pong(_p)).unwrap();
+            tungstenite::Message::Ping(data) => {
+                ws.send(tungstenite::Message::Pong(data)).unwrap();
                 continue;
             }
-            tungstenite::Message::Close(_c) => {
-                println!("Closing: {:?}", _c);
+            tungstenite::Message::Close(frame) => {
+                println!("Closing: {:?}", frame);
                 break;
             }
             _ => continue,
