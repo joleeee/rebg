@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::{Branching, GenericState, GenericStep, Instrument, State, Step};
+use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use crate::{
     arch::Arch,
     dis::{self, groups::Group},
@@ -12,8 +12,8 @@ pub struct Aarch64Step {
     state: Aarch64State,
     code: [u8; 4],
     address: u64,
-    strace: Option<String>,
-    memory_ops: Vec<super::MemoryOp>,
+    strace: Option<Box<str>>,
+    memory_ops: Box<[MemoryOp]>,
 }
 
 impl Step<32> for Aarch64Step {
@@ -36,11 +36,11 @@ impl Step<32> for Aarch64Step {
         self.address
     }
 
-    fn strace(&self) -> Option<&String> {
-        self.strace.as_ref()
+    fn strace(&self) -> Option<&str> {
+        self.strace.as_deref()
     }
 
-    fn memory_ops(&self) -> &[super::MemoryOp] {
+    fn memory_ops(&self) -> &[MemoryOp] {
         &self.memory_ops[..]
     }
 
@@ -129,8 +129,8 @@ impl TryFrom<&[String]> for Aarch64Step {
             state: generic.state,
             code: generic.code.try_into().unwrap(),
             address: generic.address,
-            strace: generic.strace,
-            memory_ops: generic.memory_ops,
+            strace: generic.strace.map(|x| x.into()),
+            memory_ops: generic.memory_ops.into_boxed_slice(),
         })
     }
 }

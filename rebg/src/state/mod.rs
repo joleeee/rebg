@@ -28,7 +28,7 @@ pub trait Step<const N: usize>: Clone + std::marker::Send + 'static {
     fn state(&self) -> &Self::STATE;
     // sometimes they differ, though, so also keep address
     fn address(&self) -> u64;
-    fn strace(&self) -> Option<&String>;
+    fn strace(&self) -> Option<&str>;
     fn memory_ops(&self) -> &[MemoryOp];
 
     fn instrument(&self) -> Self::INSTRUMENT;
