@@ -111,6 +111,16 @@ impl HistMem {
         Some(lower | upper)
     }
 
+    pub fn load8(&self, tick: u32, address: u64) -> Option<u8> {
+        let adr_lower = Self::align_down(address);
+        let offset = address - adr_lower;
+
+        let lower = self.load64aligned(tick, adr_lower)? >> (offset * 8);
+        let lower = (lower & 0xFF) as u8;
+
+        Some(lower)
+    }
+
     pub fn store64aligned(&mut self, tick: u32, address: u64, v: u64) -> Result<(), ()> {
         if !self.cells.contains_key(&address) {
             self.cells.insert(address, MCell::new());
@@ -168,10 +178,20 @@ mod tests {
             println!("{:02x}: {:016x}", a, v.load64(TICK, a).unwrap());
         }
 
+        // u64
         assert_eq!(v.load64(TICK, 0), Some(0x1111111111111111));
         assert_eq!(v.load64(TICK, 1), Some(0x1111111111111122));
         assert_eq!(v.load64(TICK, 7), Some(0x1122222222222222));
         assert_eq!(v.load64(TICK, 8), Some(0x2222222222222222));
         assert_eq!(v.load64(TICK, 9), None);
+
+        // u8
+        for a in 0..8 {
+            assert_eq!(v.load8(TICK, a), Some(0x11));
+        }
+        for a in 8..16 {
+            assert_eq!(v.load8(TICK, a), Some(0x22));
+        }
+        assert_eq!(v.load8(TICK, 16), None);
     }
 }
