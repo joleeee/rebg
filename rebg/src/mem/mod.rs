@@ -192,8 +192,6 @@ mod tests {
 
     #[test]
     fn alignment() {
-        const TICK: u32 = 555;
-
         // first 8 bytes reside at the same address
         for a in 0..8 {
             assert_eq!(HistMem::align_down(a), 0);
@@ -202,6 +200,11 @@ mod tests {
         for a in 8..16 {
             assert_eq!(HistMem::align_down(a), 8);
         }
+    }
+
+    #[test]
+    fn loads() {
+        const TICK: u32 = 555;
 
         let mut v = HistMem::new();
 
