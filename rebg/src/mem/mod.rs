@@ -93,11 +93,7 @@ impl HistMem {
 
     pub fn load64(&self, tick: u32, address: u64) -> Option<u64> {
         let adr_lower = Self::align_down(address);
-        let adr_upper = adr_lower + 8;
-
-        if adr_lower == address {
-            return self.load64aligned(tick, adr_lower);
-        }
+        let adr_upper = Self::align_down(address + 7);
 
         let upper_len = address - adr_lower;
         let lower_len = 8 - upper_len;
