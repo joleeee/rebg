@@ -275,7 +275,7 @@ impl Analyzer for TraceDumper {
                             let insn = insns.get(idx as usize);
                             let mut modifiers = vec![String::new(); cur_regs.len()];
 
-                            for r in insn.map(|i| i.read.clone()).unwrap_or_default() {
+                            for r in insn.map(|i| i.read.iter()).unwrap_or_default() {
                                 let idx = if let Some(idx) = r.idx() {
                                     idx
                                 } else {
@@ -285,7 +285,7 @@ impl Analyzer for TraceDumper {
                                 modifiers[idx].push('r');
                             }
 
-                            for r in insn.map(|i| i.write.clone()).unwrap_or_default() {
+                            for r in insn.map(|i| i.write.iter()).unwrap_or_default() {
                                 let idx = if let Some(idx) = r.idx() {
                                     idx
                                 } else {
