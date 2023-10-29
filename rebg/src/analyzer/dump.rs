@@ -305,7 +305,6 @@ impl Analyzer for TraceDumper {
                             let pairs: Vec<_> = cur_regs
                                 .iter()
                                 .zip(modifiers)
-                                .map(|(cur, modi)| (cur, modi))
                                 .enumerate()
                                 .map(|(idx, (value, modifier))| {
                                     let name = Reg::from_idx(arch, idx).unwrap().as_str();
