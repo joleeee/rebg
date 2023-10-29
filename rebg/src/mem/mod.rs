@@ -170,7 +170,7 @@ mod tests {
         v.store64aligned(TICK, 0, 0x1111111111111111).unwrap();
         v.store64aligned(TICK, 8, 0x2222222222222222).unwrap();
 
-        for a in 0..8 {
+        for a in 0..=8 {
             println!("{:02x}: {:016x}", a, v.load64(TICK, a).unwrap());
         }
 
