@@ -57,7 +57,6 @@ fn handle<STEP, const N: usize>(
         .enumerate()
         .zip(instrumentations.iter())
         .zip(bt_lens);
-    // .filter(|(((_, tr), _), _)| tr.state().pc() < 0x5500000000);
 
     let chunked = iter.chunks(100);
 
