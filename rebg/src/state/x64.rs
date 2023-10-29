@@ -2,20 +2,17 @@ use std::str::FromStr;
 
 use crate::{
     arch::Arch,
-    dis::{self, groups::Group},
+    dis::{
+        self,
+        groups::Group,
+        regs::{Reg, X64Reg},
+    },
 };
 
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use bitflags::bitflags;
 use capstone::{
-    arch::{
-        self,
-        x86::X86Reg::{
-            X86_REG_R10, X86_REG_R11, X86_REG_R12, X86_REG_R13, X86_REG_R14, X86_REG_R15,
-            X86_REG_R8, X86_REG_R9, X86_REG_RAX, X86_REG_RBP, X86_REG_RBX, X86_REG_RCX,
-            X86_REG_RDI, X86_REG_RDX, X86_REG_RIP, X86_REG_RSI, X86_REG_RSP,
-        },
-    },
+    arch::{self},
     RegId,
 };
 
@@ -103,40 +100,20 @@ impl State<16> for X64State {
     fn flags(&self) -> &X64Flags {
         &self.flags
     }
-
-    fn reg_name(i: usize) -> &'static str {
-        [
-            "rax", "rbx", "rcx", "rdx", "rbp", "rsp", "rsi", "rdi", "r8", "r9", "r10", "r11",
-            "r12", "r13", "r14", "r15",
-        ][i]
-    }
 }
 
 impl X64State {
-    // Currently a best effort, only the normal register, only r prefix (ex. no eax)
     fn read_reg(&self, reg_id: RegId) -> Option<u64> {
-        let idx = match reg_id.0 as u32 {
-            X86_REG_RAX => 0,
-            X86_REG_RBX => 1,
-            X86_REG_RCX => 2,
-            X86_REG_RDX => 3,
-            X86_REG_RBP => 4,
-            X86_REG_RSP => 5,
-            X86_REG_RSI => 6,
-            X86_REG_RDI => 7,
-            X86_REG_R8 => 8,
-            X86_REG_R9 => 9,
-            X86_REG_R10 => 10,
-            X86_REG_R11 => 11,
-            X86_REG_R12 => 12,
-            X86_REG_R13 => 13,
-            X86_REG_R14 => 14,
-            X86_REG_R15 => 15,
-            X86_REG_RIP => return Some(self.pc),
-            _ => return None,
-        };
+        let reg = Reg::from_num(Arch::X86_64, reg_id.0)?;
 
-        Some(self.regs[idx])
+        // eax -> rax, w0 -> x0
+        let reg = reg.canonical();
+
+        if matches!(reg, Reg::X64Reg(X64Reg::Rip)) {
+            return Some(self.pc);
+        }
+
+        Some(self.regs[reg.idx()?])
     }
 }
 

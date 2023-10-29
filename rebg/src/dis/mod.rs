@@ -8,33 +8,35 @@
 // want `rax` (or some other canonical ref)
 
 pub mod groups;
+pub mod regs;
 
 use crate::arch::Arch;
 use std::rc::Rc;
 use thiserror::Error;
 
-use self::groups::Group;
+use self::{groups::Group, regs::Reg};
 
 pub struct Dis {
     pub arch: Arch,
     pub cs: Rc<capstone::Capstone>,
 }
 
+#[derive(Clone, Debug)]
 pub struct Instruction {
     pub len: usize,
     pub address: u64,
 
     // registers used
-    pub read: Vec<capstone::RegId>,
-    pub write: Vec<capstone::RegId>,
+    pub read: Box<[Reg]>,
+    pub write: Box<[Reg]>,
 
     // string stuff
     pub mnemonic: Option<String>,
     pub op_str: Option<String>,
 
     // blah
-    pub operands: Vec<capstone::arch::ArchOperand>,
-    pub groups: Vec<Group>,
+    pub operands: Box<[capstone::arch::ArchOperand]>,
+    pub groups: Box<[Group]>,
 }
 
 #[derive(Error, Debug)]
@@ -43,6 +45,8 @@ pub enum DisError {
     Capstone(#[from] capstone::Error),
     #[error("invalid groupid")]
     NoGroup(u8),
+    #[error("invalid regid")]
+    NoReg(u16),
 }
 
 impl Dis {
@@ -57,14 +61,24 @@ impl Dis {
         let detail = self.cs.insn_detail(insn)?;
 
         let operands = detail.arch_detail().operands();
-        let groups_ids: Vec<_> = detail.groups().into();
 
-        let mut groups = Vec::new();
-        for id in groups_ids {
-            groups.push(Group::from_num(self.arch, id.0).ok_or(DisError::NoGroup(id.0))?);
-        }
+        let groups: Box<[Group]> = detail
+            .groups()
+            .iter()
+            .map(|id| Group::from_num(self.arch, id.0).ok_or(DisError::NoGroup(id.0)))
+            .collect::<Result<_, _>>()?;
 
-        let (read, write) = self.cs.regs_access(insn).unwrap().unwrap();
+        let (read_ids, write_ids) = self.cs.regs_access(insn).unwrap().unwrap();
+
+        let read: Box<[Reg]> = read_ids
+            .iter()
+            .map(|id| Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0)))
+            .collect::<Result<_, _>>()?;
+
+        let write: Box<[Reg]> = write_ids
+            .iter()
+            .map(|id| Reg::from_num(self.arch, id.0).ok_or(DisError::NoReg(id.0)))
+            .collect::<Result<_, _>>()?;
 
         Ok(Instruction {
             address: insn.address(),
@@ -73,7 +87,7 @@ impl Dis {
             write,
             mnemonic: insn.mnemonic().map(str::to_string),
             op_str: insn.op_str().map(str::to_string),
-            operands,
+            operands: operands.into_boxed_slice(),
             groups,
         })
     }

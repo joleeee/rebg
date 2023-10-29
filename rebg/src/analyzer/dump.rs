@@ -1,7 +1,8 @@
 use super::Analyzer;
 use crate::binary::Binary;
+use crate::dis::regs::Reg;
 use crate::dis::{self, Dis, Instruction};
-use crate::state::{self, Branching, Instrument};
+use crate::state::{Branching, Instrument};
 use crate::{
     arch::Arch,
     host::Host,
@@ -14,6 +15,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_json::json;
+use std::cell::RefCell;
 use std::net::TcpListener;
 use std::rc::Rc;
 use std::{
@@ -81,7 +83,10 @@ impl Analyzer for TraceDumper {
         // merge into a single table
         let table = symbol_tables
             .into_iter()
-            .reduce(|accum, item| accum.push_table(item))
+            .reduce(|mut accum, item| {
+                accum.push_table(item);
+                accum
+            })
             .unwrap();
 
         let mut trace = Vec::new();
@@ -107,6 +112,8 @@ impl Analyzer for TraceDumper {
             }
         };
 
+        let table = Rc::new(RefCell::new(table));
+        // analyzer will insert new symbols into table
         let mut analyzer = RealAnalyzer::new(dis, arch, table.clone());
 
         // we want changes to instantly show up in the UI, but we are also
@@ -114,13 +121,15 @@ impl Analyzer for TraceDumper {
         // send the raw step, then later send the analyzed step
 
         let mut instrumentations = Vec::new();
+        let mut insns = Vec::new();
 
         let mut bt = Vec::new();
         let mut bt_lens = Vec::new();
 
         for cur_step in &trace {
-            let (_, instrumentation) = analyzer.step(launcher, cur_step);
+            let (insn, instrumentation) = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
+            insns.push(insn);
             let prev_instrumentation = instrumentations.iter().rev().nth(1);
 
             // do for the PREVIOUS branch
@@ -144,7 +153,8 @@ impl Analyzer for TraceDumper {
                             bt.push(*return_address);
 
                             let sym_txt = {
-                                let sym = analyzer.syms.lookup(*target);
+                                let syms = analyzer.syms.borrow();
+                                let sym = syms.lookup(*target);
                                 if let Some(sym) = sym {
                                     format!(" = <{}>", sym)
                                 } else {
@@ -205,9 +215,10 @@ impl Analyzer for TraceDumper {
         let server = TcpListener::bind("127.0.0.1:9001").unwrap();
         for stream in server.incoming() {
             let trace = trace.clone();
+            let insns = insns.clone();
             let instrumentations = instrumentations.clone();
             let bt_lens = bt_lens.clone();
-            let table = table.clone();
+            let table = (*table).clone();
             std::thread::spawn(move || {
                 // first send all addresses etc
                 let mut ws = accept(stream.unwrap()).unwrap();
@@ -225,7 +236,7 @@ impl Analyzer for TraceDumper {
                     let mut parts = Vec::new();
 
                     for (((i, step), instru), bt_len) in chunk {
-                        let symbolized = if let Some(s) = table.lookup(step.state().pc()) {
+                        let symbolized = if let Some(s) = table.borrow().lookup(step.state().pc()) {
                             format!("{}", s)
                         } else {
                             "".to_string()
@@ -263,32 +274,44 @@ impl Analyzer for TraceDumper {
                     let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
                     match msg {
                         RebgRequest::Registers(idx) => {
-                            let cur_regs = {
-                                let step = trace.get(idx as usize).unwrap();
-                                step.state().regs()
-                            };
-                            let prev_regs = {
-                                if idx > 0 {
-                                    let step = trace.get((idx - 1) as usize).unwrap();
-                                    Some(step.state().regs())
+                            // show current values
+                            let step = trace.get(idx as usize).unwrap();
+                            let cur_regs = step.state().regs();
+
+                            // with markings based on what happen from the PREV step
+                            let insn = insns.get(idx as usize);
+                            let mut modifiers = vec![String::new(); cur_regs.len()];
+
+                            for r in insn.map(|i| i.read.iter()).unwrap_or_default() {
+                                let idx = if let Some(idx) = r.idx() {
+                                    idx
                                 } else {
-                                    None
-                                }
-                            };
+                                    continue;
+                                };
 
-                            let prev_regs = prev_regs.unwrap_or(cur_regs);
+                                modifiers[idx].push('r');
+                            }
 
-                            let regs: Vec<_> = cur_regs
+                            for r in insn.map(|i| i.write.iter()).unwrap_or_default() {
+                                let idx = if let Some(idx) = r.idx() {
+                                    idx
+                                } else {
+                                    continue;
+                                };
+
+                                modifiers[idx].push('w');
+                            }
+
+                            let pairs: Vec<_> = cur_regs
                                 .iter()
-                                .zip(prev_regs)
-                                .map(|(cur, prev)| (cur, if cur == prev { "" } else { "w" }))
+                                .zip(modifiers)
+                                .map(|(cur, modi)| (cur, modi))
+                                .enumerate()
+                                .map(|(idx, (value, modifier))| {
+                                    let name = Reg::from_idx(arch, idx).unwrap().as_str();
+                                    (name, value, modifier)
+                                })
                                 .collect();
-
-                            let pairs = regs.iter().enumerate().map(|(idx, (value, modifier))| {
-                                let name = <STEP as state::Step<N>>::STATE::reg_name(idx);
-                                (name, value, modifier)
-                            });
-                            let pairs: Vec<_> = pairs.collect();
 
                             let serialized = serde_json::to_string(
                                 &json!({"registers": {"idx": idx, "registers": pairs}}),
@@ -462,7 +485,7 @@ where
 {
     hist: Vec<STEP::STATE>,
     dis: Dis,
-    syms: SymbolTable,
+    syms: Rc<RefCell<SymbolTable>>,
     arch: Arch,
     syscall_state: SyscallState,
 }
@@ -471,7 +494,7 @@ impl<STEP, const N: usize> RealAnalyzer<STEP, N>
 where
     STEP: Step<N>,
 {
-    fn new(dis: Dis, arch: Arch, syms: SymbolTable) -> Self {
+    fn new(dis: Dis, arch: Arch, syms: Rc<RefCell<SymbolTable>>) -> Self {
         Self {
             hist: Vec::new(),
             dis,
@@ -490,7 +513,7 @@ where
             let current = step.state();
 
             let diff = rstate::diff(previous, current);
-            diff.print::<STEP::STATE>();
+            diff.print::<STEP::STATE>(self.arch);
             println!();
         }
 
@@ -498,9 +521,10 @@ where
         let code = step.code();
 
         let insn = self.dis.disassemble_one(code, address).unwrap();
-        let op = inst_to_str(&insn, Some(&self.syms));
+        let op = inst_to_str(&insn, Some(&self.syms.borrow()));
 
-        let symbol = self.syms.lookup(address);
+        let syms = self.syms.borrow();
+        let symbol = syms.lookup(address);
 
         let location = if let Some(ref symbol) = symbol {
             let symbol = format!("<{}>", symbol);
@@ -508,6 +532,8 @@ where
         } else {
             format!("0x{:016x}", address)
         };
+
+        drop(syms);
 
         println!("{}: {}", location, op);
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
@@ -554,7 +580,7 @@ where
                         // TODO size
                         new_symbol_table = new_symbol_table.add_offset(addr);
 
-                        self.syms = self.syms.clone().push_table(new_symbol_table);
+                        self.syms.borrow_mut().push_table(new_symbol_table);
                     }
                 }
                 Ok(Some(StateUpdate::Munmap { addr: _, size: _ })) => {
