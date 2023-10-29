@@ -9,6 +9,7 @@ use crate::{
 };
 use std::{cell::RefCell, fmt};
 
+#[derive(Clone, Debug)]
 pub struct Analysis<STEP, const N: usize>
 where
     STEP: Step<N> + fmt::Debug,
