@@ -91,6 +91,11 @@ impl SymbolTable {
                 continue;
             }
 
+            // not sure why a symbol would be empty, but it happens
+            if name.as_str().is_empty() {
+                continue;
+            }
+
             // find the header it is in
             let offset = &self.offsets.iter().find(|offset| {
                 let offset_lower = offset.addr;
