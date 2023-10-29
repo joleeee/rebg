@@ -10,7 +10,29 @@ use std::collections::HashMap;
 // need to access 2 places.
 
 pub struct MCell {
-    value: u64,
+    values: Vec<(u32, u64)>,
+}
+
+impl MCell {
+    fn add_tick(&mut self, tick: u32, value: u64) -> Result<(), ()> {
+        if Some(tick) <= self.values.last().map(|x| x.0) {
+            return Err(());
+        }
+        self.values.push((tick, value));
+        Ok(())
+    }
+
+    fn at_tick(&self, tick: u32) -> Option<u64> {
+        let idx = self.values.partition_point(|(t, _v)| *t <= tick);
+
+        // we get idx 1 too high
+        // so if it's 0, that means no too early (cus index -1)
+        if idx == 0 {
+            return None;
+        }
+
+        Some(self.values.get(idx - 1).unwrap().1)
+    }
 }
 
 pub struct HistMem {
@@ -54,26 +76,23 @@ impl HistMem {
         }
     }
 
-    pub fn load64aligned(&self, adr: u64) -> Option<u64> {
-        self.cells.get(&adr).map(|c| c.value)
+    pub fn load64aligned(&self, tick: u32, adr: u64) -> Option<u64> {
+        self.cells.get(&adr)?.at_tick(tick)
     }
 
-    pub fn load64(&self, address: u64) -> Option<u64> {
+    pub fn load64(&self, tick: u32, address: u64) -> Option<u64> {
         let adr_lower = Self::align_down(address);
         let adr_upper = adr_lower + 8;
 
         if adr_lower == address {
-            return self.load64aligned(adr_lower);
+            return self.load64aligned(tick, adr_lower);
         }
 
         let upper_len = address - adr_lower;
         let lower_len = 8 - upper_len;
 
-        let lower = self.load64aligned(adr_lower)?;
-        let upper = self.load64aligned(adr_upper)?;
-
-        // dbg!((address, adr_lower, adr_upper, lower_len, upper_len));
-        // println!("{:016x}", lower & Self::get_lower_bitmask(lower_len));
+        let lower = self.load64aligned(tick, adr_lower)?;
+        let upper = self.load64aligned(tick, adr_upper)?;
 
         let lower = lower & Self::get_lower_bitmask(lower_len);
         let upper = upper & Self::get_upper_bitmask(upper_len);
@@ -81,19 +100,46 @@ impl HistMem {
         Some(lower | upper)
     }
 
-    pub fn store64aligned(&mut self, address: u64, v: u64) {
-        self.cells.insert(address, MCell { value: v });
+    pub fn store64aligned(&mut self, tick: u32, address: u64, v: u64) -> Result<(), ()> {
+        if !self.cells.contains_key(&address) {
+            self.cells.insert(address, MCell { values: vec![] });
+        }
+
+        let cell = self.cells.get_mut(&address).expect("logic error");
+
+        Ok(cell.add_tick(tick, v)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::mem::HistMem;
     use std::collections::HashMap;
 
-    use crate::mem::HistMem;
+    use super::MCell;
+
+    #[test]
+    fn ticks() {
+        let mut cell = MCell { values: vec![] };
+        cell.add_tick(4, 0x11).unwrap();
+        cell.add_tick(7, 0x22).unwrap();
+        cell.add_tick(8, 0x33).unwrap();
+
+        assert_eq!(cell.at_tick(0), None);
+        assert_eq!(cell.at_tick(3), None);
+        assert_eq!(cell.at_tick(4), Some(0x11));
+        assert_eq!(cell.at_tick(5), Some(0x11));
+        assert_eq!(cell.at_tick(6), Some(0x11));
+        assert_eq!(cell.at_tick(7), Some(0x22));
+        assert_eq!(cell.at_tick(8), Some(0x33));
+        assert_eq!(cell.at_tick(9), Some(0x33));
+        assert_eq!(cell.at_tick(9999999), Some(0x33));
+    }
 
     #[test]
     fn alignment() {
+        const TICK: u32 = 555;
+
         // first 8 bytes reside at the same address
         for a in 0..8 {
             assert_eq!(HistMem::align_down(a), 0);
@@ -107,17 +153,17 @@ mod tests {
             cells: HashMap::new(),
         };
 
-        v.store64aligned(0, 0x1111111111111111);
-        v.store64aligned(8, 0x2222222222222222);
+        v.store64aligned(TICK, 0, 0x1111111111111111).unwrap();
+        v.store64aligned(TICK, 8, 0x2222222222222222).unwrap();
 
         for a in 0..8 {
-            println!("{:02x}: {:016x}", a, v.load64(a).unwrap());
+            println!("{:02x}: {:016x}", a, v.load64(TICK, a).unwrap());
         }
 
-        assert_eq!(v.load64(0), Some(0x1111111111111111));
-        assert_eq!(v.load64(1), Some(0x1111111111111122));
-        assert_eq!(v.load64(7), Some(0x1122222222222222));
-        assert_eq!(v.load64(8), Some(0x2222222222222222));
-        assert_eq!(v.load64(9), None);
+        assert_eq!(v.load64(TICK, 0), Some(0x1111111111111111));
+        assert_eq!(v.load64(TICK, 1), Some(0x1111111111111122));
+        assert_eq!(v.load64(TICK, 7), Some(0x1122222222222222));
+        assert_eq!(v.load64(TICK, 8), Some(0x2222222222222222));
+        assert_eq!(v.load64(TICK, 9), None);
     }
 }
