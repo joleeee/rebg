@@ -18,7 +18,6 @@ If you're using macos and tracing `linux/amd64`, you can cut runtime by about
 
 # Future work
 - PIN: Linux & Windows tracing.
-- Web ui
 - Efficently storing memory history.
 
 # UI
