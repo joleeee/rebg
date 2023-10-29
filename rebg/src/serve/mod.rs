@@ -105,24 +105,14 @@ fn handle<STEP, const N: usize>(
                 let insn = insns.get(idx as usize);
                 let mut modifiers = vec![String::new(); cur_regs.len()];
 
-                for r in insn.map(|i| i.read.iter()).unwrap_or_default() {
-                    let idx = if let Some(idx) = r.canonical().idx() {
-                        idx
-                    } else {
-                        continue;
-                    };
+                if let Some(insn) = insn {
+                    for idx in insn.read.iter().flat_map(|r| r.canonical().idx()) {
+                        modifiers[idx].push('r');
+                    }
 
-                    modifiers[idx].push('r');
-                }
-
-                for r in insn.map(|i| i.write.iter()).unwrap_or_default() {
-                    let idx = if let Some(idx) = r.canonical().idx() {
-                        idx
-                    } else {
-                        continue;
-                    };
-
-                    modifiers[idx].push('w');
+                    for idx in insn.write.iter().flat_map(|r| r.canonical().idx()) {
+                        modifiers[idx].push('w');
+                    }
                 }
 
                 let pairs: Vec<_> = cur_regs
