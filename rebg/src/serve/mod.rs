@@ -30,6 +30,12 @@ where
     });
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum RebgRequest {
+    Registers(u64),
+}
+
 fn handle<STEP, const N: usize>(
     mut ws: WebSocket<TcpStream>,
     analysis: &Analysis<STEP, N>,
@@ -87,12 +93,6 @@ fn handle<STEP, const N: usize>(
             }
             _ => continue,
         };
-
-        #[derive(serde::Deserialize, serde::Serialize)]
-        #[serde(rename_all = "snake_case")]
-        enum RebgRequest {
-            Registers(u64),
-        }
 
         let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
         match msg {
