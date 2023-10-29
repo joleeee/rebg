@@ -2,7 +2,7 @@
 
 use bitflags::Flags;
 
-use crate::state::State;
+use crate::{arch::Arch, dis::regs::Reg, state::State};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(dead_code)]
@@ -32,22 +32,23 @@ pub struct StateDiff<const N: usize> {
 }
 
 impl<const N: usize> StateDiff<N> {
-    pub fn print<S: State<N>>(&self) -> bool {
+    pub fn print<S: State<N>>(&self, arch: Arch) -> bool {
         let diff_regs = self
             .regs
             .iter()
             .enumerate()
             .filter_map(|(i, s)| {
                 if let RDiff::Changed { from, to } = s {
-                    Some((i, from, to))
+                    Some((Reg::from_idx(arch, i), from, to))
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
 
-        for (i, a, b) in &diff_regs {
-            println!("{} <- {:x} (prev {:x})", S::reg_name_idx(*i), b, a);
+        for (r, a, b) in &diff_regs {
+            let reg_name = r.map(|x| x.as_str()).unwrap_or("<unknown reg>");
+            println!("{} <- {:x} (prev {:x})", reg_name, b, a);
         }
         if let RDiff::Changed { from: _, to } = self.pc {
             println!("pc <- {:x}", to);

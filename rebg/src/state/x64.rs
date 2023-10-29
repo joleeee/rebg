@@ -100,14 +100,6 @@ impl State<16> for X64State {
     fn flags(&self) -> &X64Flags {
         &self.flags
     }
-
-    fn reg_name_idx(i: usize) -> &'static str {
-        // no cure why the order is so fucked
-        [
-            "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11",
-            "r12", "r13", "r14", "r15",
-        ][i]
-    }
 }
 
 impl X64State {

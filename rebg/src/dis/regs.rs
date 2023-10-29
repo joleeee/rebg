@@ -691,10 +691,7 @@ mod tests {
     use convert_case::Casing;
 
     use super::{Aarch64Reg, X64Reg};
-    use crate::{
-        arch::Arch,
-        state::{Aarch64State, State, X64State},
-    };
+    use crate::arch::Arch;
 
     #[test]
     fn aarch64_canon() {
@@ -741,7 +738,14 @@ mod tests {
             assert!(r.is_some(), "no reg with idx {}", i);
 
             let r = r.unwrap();
-            assert_eq!(r.as_str(), Aarch64State::reg_name_idx(i));
+            assert_eq!(
+                r.as_str(),
+                [
+                    "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11",
+                    "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22",
+                    "x23", "x24", "x25", "x26", "x27", "x28", "fp", "lr", "sp",
+                ][i]
+            );
         }
 
         assert_eq!(Aarch64Reg::from_idx(32), None);
@@ -754,7 +758,13 @@ mod tests {
             assert!(r.is_some(), "no reg with idx {}", i);
 
             let r = r.unwrap();
-            assert_eq!(r.as_str(), X64State::reg_name_idx(i));
+            assert_eq!(
+                r.as_str(),
+                [
+                    "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10",
+                    "r11", "r12", "r13", "r14", "r15",
+                ][i]
+            );
         }
 
         assert_eq!(X64Reg::from_idx(16), None);

@@ -1,7 +1,8 @@
 use super::Analyzer;
 use crate::binary::Binary;
+use crate::dis::regs::Reg;
 use crate::dis::{self, Dis, Instruction};
-use crate::state::{self, Branching, Instrument};
+use crate::state::{Branching, Instrument};
 use crate::{
     arch::Arch,
     host::Host,
@@ -300,7 +301,7 @@ impl Analyzer for TraceDumper {
                                 .map(|(cur, modi)| (cur, modi))
                                 .enumerate()
                                 .map(|(idx, (value, modifier))| {
-                                    let name = <STEP as state::Step<N>>::STATE::reg_name_idx(idx);
+                                    let name = Reg::from_idx(arch, idx).unwrap().as_str();
                                     (name, value, modifier)
                                 })
                                 .collect();
@@ -505,7 +506,7 @@ where
             let current = step.state();
 
             let diff = rstate::diff(previous, current);
-            diff.print::<STEP::STATE>();
+            diff.print::<STEP::STATE>(self.arch);
             println!();
         }
 
