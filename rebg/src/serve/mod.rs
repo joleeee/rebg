@@ -18,9 +18,12 @@ where
 
     std::thread::scope(|s| {
         for stream in server.incoming() {
-            if let Ok(stream) = stream {
-                if let Ok(ws) = accept(stream) {
+            match stream.map(|s| accept(s)) {
+                Ok(Ok(ws)) => {
                     s.spawn(|| handle(ws, &analysis, arch));
+                }
+                e => {
+                    println!("WS failed: {:?}", e);
                 }
             }
         }
@@ -47,7 +50,7 @@ fn handle<STEP, const N: usize>(
         .iter()
         .enumerate()
         .zip(instrumentations.iter())
-        .zip(bt_lens.into_iter());
+        .zip(bt_lens);
     // .filter(|(((_, tr), _), _)| tr.state().pc() < 0x5500000000);
 
     let chunked = iter.chunks(100);
