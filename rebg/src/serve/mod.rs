@@ -18,7 +18,7 @@ where
 
     std::thread::scope(|s| {
         for stream in server.incoming() {
-            match stream.map(|s| accept(s)) {
+            match stream.map(accept) {
                 Ok(Ok(ws)) => {
                     s.spawn(|| handle(ws, &analysis, arch));
                 }
