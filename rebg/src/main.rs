@@ -1,8 +1,8 @@
 use rebg::analyzer::dump::TraceDumper;
-use rebg::analyzer::Analyzer;
 use rebg::binary::Binary;
 use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
+use rebg::serve;
 use rebg::state::{Aarch64Step, Step, X64Step};
 use rebg::tracer::qemu::QEMUParser;
 use rebg::tracer::TracerCmd;
@@ -95,11 +95,15 @@ fn main() {
         Arch::ARM64 => {
             let parser =
                 launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, target_arch, &program);
-            TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
+            let analysis =
+                TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
+            serve::ws(analysis, target_arch);
         }
         Arch::X86_64 => {
             let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, target_arch, &program);
-            TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
+            let analysis =
+                TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
+            serve::ws(analysis, target_arch);
         }
     }
 }

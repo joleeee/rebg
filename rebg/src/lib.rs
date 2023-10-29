@@ -7,6 +7,7 @@ pub mod binary;
 pub mod dis;
 pub mod host;
 pub mod rstate;
+pub mod serve;
 pub mod state;
 pub mod syms;
 pub mod tracer;

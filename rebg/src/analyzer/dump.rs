@@ -1,6 +1,5 @@
-use super::Analyzer;
+use crate::analyzer::Analysis;
 use crate::binary::Binary;
-use crate::dis::regs::Reg;
 use crate::dis::{self, Dis, Instruction};
 use crate::state::{Branching, Instrument};
 use crate::{
@@ -11,30 +10,27 @@ use crate::{
     syms::SymbolTable,
     tracer::ParsedStep,
 };
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde_json::json;
 use std::cell::RefCell;
-use std::net::TcpListener;
 use std::rc::Rc;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use tungstenite::accept;
 
 /// Dumps the log
 pub struct TraceDumper {}
 
-impl Analyzer for TraceDumper {
-    fn analyze<STEP, LAUNCHER, TRACER, ITER, const N: usize>(
+impl TraceDumper {
+    pub fn analyze<STEP, LAUNCHER, TRACER, ITER, const N: usize>(
         // to read files
         launcher: &LAUNCHER,
         // inferred from TRACER
         mut iter: ITER,
         arch: Arch,
-    ) where
+    ) -> Analysis<STEP, N>
+    where
         STEP: Step<N> + std::fmt::Debug,
         // for inferance
         LAUNCHER: Host,
@@ -212,116 +208,12 @@ impl Analyzer for TraceDumper {
         assert_eq!(trace.len(), instrumentations.len());
         assert_eq!(trace.len(), bt_lens.len());
 
-        let server = TcpListener::bind("127.0.0.1:9001").unwrap();
-        for stream in server.incoming() {
-            let trace = trace.clone();
-            let insns = insns.clone();
-            let instrumentations = instrumentations.clone();
-            let bt_lens = bt_lens.clone();
-            let table = (*table).clone();
-            std::thread::spawn(move || {
-                // first send all addresses etc
-                let mut ws = accept(stream.unwrap()).unwrap();
-
-                let iter = trace
-                    .iter()
-                    .enumerate()
-                    .zip(instrumentations.iter())
-                    .zip(bt_lens.into_iter());
-                // .filter(|(((_, tr), _), _)| tr.state().pc() < 0x5500000000);
-
-                let chunked = iter.chunks(100);
-
-                for chunk in &chunked {
-                    let mut parts = Vec::new();
-
-                    for (((i, step), instru), bt_len) in chunk {
-                        let symbolized = if let Some(s) = table.borrow().lookup(step.state().pc()) {
-                            format!("{}", s)
-                        } else {
-                            "".to_string()
-                        };
-                        parts.push(json!({"i": i, "a": step.state().pc(), "c": instru.disassembly, "d": bt_len, "s": symbolized}));
-                    }
-
-                    let json = serde_json::to_string(&json!({"steps": parts})).unwrap();
-                    ws.send(tungstenite::Message::Text(json)).unwrap();
-                }
-
-                // then send register values on request
-                loop {
-                    let msg = ws.read().unwrap();
-
-                    let msg = match msg {
-                        tungstenite::Message::Text(text) => text,
-                        tungstenite::Message::Ping(_p) => {
-                            ws.send(tungstenite::Message::Pong(_p)).unwrap();
-                            continue;
-                        }
-                        tungstenite::Message::Close(_c) => {
-                            println!("Closing: {:?}", _c);
-                            break;
-                        }
-                        _ => continue,
-                    };
-
-                    #[derive(serde::Deserialize, serde::Serialize)]
-                    #[serde(rename_all = "snake_case")]
-                    enum RebgRequest {
-                        Registers(u64),
-                    }
-
-                    let msg: RebgRequest = serde_json::from_str(&msg).unwrap();
-                    match msg {
-                        RebgRequest::Registers(idx) => {
-                            // show current values
-                            let step = trace.get(idx as usize).unwrap();
-                            let cur_regs = step.state().regs();
-
-                            // with markings based on what happen from the PREV step
-                            let insn = insns.get(idx as usize);
-                            let mut modifiers = vec![String::new(); cur_regs.len()];
-
-                            for r in insn.map(|i| i.read.iter()).unwrap_or_default() {
-                                let idx = if let Some(idx) = r.canonical().idx() {
-                                    idx
-                                } else {
-                                    continue;
-                                };
-
-                                modifiers[idx].push('r');
-                            }
-
-                            for r in insn.map(|i| i.write.iter()).unwrap_or_default() {
-                                let idx = if let Some(idx) = r.canonical().idx() {
-                                    idx
-                                } else {
-                                    continue;
-                                };
-
-                                modifiers[idx].push('w');
-                            }
-
-                            let pairs: Vec<_> = cur_regs
-                                .iter()
-                                .zip(modifiers)
-                                .enumerate()
-                                .map(|(idx, (value, modifier))| {
-                                    let name = Reg::from_idx(arch, idx).unwrap().as_str();
-                                    (name, value, modifier)
-                                })
-                                .collect();
-
-                            let serialized = serde_json::to_string(
-                                &json!({"registers": {"idx": idx, "registers": pairs}}),
-                            )
-                            .unwrap();
-
-                            ws.send(tungstenite::Message::Text(serialized)).unwrap();
-                        }
-                    }
-                }
-            });
+        Analysis {
+            trace,
+            insns,
+            instrumentations,
+            bt_lens,
+            table: (*table).clone(),
         }
     }
 }
