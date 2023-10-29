@@ -1,11 +1,8 @@
 pub mod dump;
 use crate::{
-    arch::Arch,
     dis::Instruction,
-    host::Host,
     state::{Instrumentation, Step},
     syms::SymbolTable,
-    tracer::{ParsedStep, Tracer},
 };
 use std::fmt;
 
@@ -19,20 +16,4 @@ where
     pub instrumentations: Vec<Instrumentation>,
     pub bt_lens: Vec<usize>,
     pub table: SymbolTable,
-}
-
-pub trait Analyzer {
-    fn analyze<STEP, LAUNCHER, TRACER, ITER, const N: usize>(
-        // to read files
-        launcher: &LAUNCHER,
-        // inferred from TRACER
-        iter: ITER,
-        arch: Arch,
-    ) -> Analysis<STEP, N>
-    where
-        STEP: Step<N> + fmt::Debug,
-        LAUNCHER: Host,
-        <LAUNCHER as Host>::Error: fmt::Debug,
-        TRACER: Tracer<STEP, N, ITER = ITER>,
-        ITER: Iterator<Item = ParsedStep<STEP, N>>;
 }
