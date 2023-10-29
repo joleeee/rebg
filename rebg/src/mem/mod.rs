@@ -126,6 +126,25 @@ impl HistMem {
         Some(combined)
     }
 
+    pub fn load16(&self, tick: u32, address: u64) -> Option<u16> {
+        let adr_lower = Self::align_down(address);
+        let adr_upper = Self::align_down(address + 1);
+
+        let upper_len = address - adr_lower;
+        let lower_len = 8 - upper_len;
+
+        let lower = self.load64aligned(tick, adr_lower)?;
+        let upper = self.load64aligned(tick, adr_upper)?;
+
+        let lower = lower & Self::get_lower_bitmask(lower_len);
+        let upper = upper & Self::get_upper_bitmask(upper_len);
+
+        let combined = lower | upper;
+        let combined = (combined >> 48) as u16;
+
+        Some(combined)
+    }
+
     pub fn load8(&self, tick: u32, address: u64) -> Option<u8> {
         let adr_lower = Self::align_down(address);
         let offset = address - adr_lower;
@@ -213,6 +232,18 @@ mod tests {
         assert_eq!(v.load32(TICK, 9), Some(0x22222222));
         assert_eq!(v.load32(TICK, 12), Some(0x22222222));
         assert_eq!(v.load32(TICK, 13), None);
+
+        // u16
+        println!("");
+        for a in 0..10 {
+            println!("16 {:02x}: {:04x}", a, v.load16(TICK, a).unwrap());
+        }
+        assert_eq!(v.load16(TICK, 0), Some(0x1111));
+        assert_eq!(v.load16(TICK, 6), Some(0x1111));
+        assert_eq!(v.load16(TICK, 7), Some(0x1122));
+        assert_eq!(v.load16(TICK, 8), Some(0x2222));
+        assert_eq!(v.load16(TICK, 14), Some(0x2222));
+        assert_eq!(v.load16(TICK, 15), None);
 
         // u8
         for a in 0..8 {
