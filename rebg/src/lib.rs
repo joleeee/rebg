@@ -6,6 +6,7 @@ pub mod arch;
 pub mod binary;
 pub mod dis;
 pub mod host;
+pub mod mem;
 pub mod rstate;
 pub mod serve;
 pub mod state;
