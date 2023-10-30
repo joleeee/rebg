@@ -276,6 +276,27 @@ impl HistMem {
 
         Ok(())
     }
+
+    pub fn store8(&mut self, tick: u32, address: u64, value: u8) -> Result<(), ()> {
+        let adr = Self::align_down(address);
+        let offset = address - adr;
+
+        let existing = self.load64aligned(tick, adr).ok_or(())?;
+
+        let mask_l = Self::get_lower_bitmask(offset + 1);
+        let mask_r = Self::get_upper_bitmask(8 - offset);
+        let mask = mask_l & mask_r;
+        let existing = existing & !mask;
+
+        let overwrite = (value as u64) << ((7 - offset) * 8);
+        let value = existing | overwrite;
+
+        if mask != 0 {
+            self.store64aligned(tick, adr, value)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -381,6 +402,19 @@ mod tests {
 
         assert_eq!(v.load64aligned(TICK + 110, 0), Some(0xffffeeeedd998877));
         assert_eq!(v.load64aligned(TICK + 110, 8), Some(0x6655000044444444));
+
+        // u8
+        v.store64aligned(TICK + 200, 0, 0x2222222222222222).unwrap();
+        v.store64aligned(TICK + 200, 8, 0x2222222222222222).unwrap();
+
+        v.store8(TICK + 201, 0, 0x33).unwrap();
+        v.store8(TICK + 202, 3, 0x33).unwrap();
+        v.store8(TICK + 203, 7, 0x88).unwrap();
+        v.store8(TICK + 204, 8, 0x99).unwrap();
+        v.store8(TICK + 205, 9, 0x77).unwrap();
+
+        assert_eq!(v.load64aligned(TICK + 210, 0), Some(0x3322223322222288));
+        assert_eq!(v.load64aligned(TICK + 210, 8), Some(0x9977222222222222));
     }
 
     #[test]
