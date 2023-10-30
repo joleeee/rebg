@@ -162,7 +162,35 @@ impl HistMem {
 
         let cell = self.cells.get_mut(&address).expect("logic error");
 
-        Ok(cell.add_tick(tick, v)?)
+        cell.add_tick(tick, v)?;
+        Ok(())
+    }
+
+    pub fn store64(&mut self, tick: u32, address: u64, value: u64) -> Result<(), ()> {
+        let adr_lower = Self::align_down(address);
+        let adr_upper = Self::align_down(address + 7);
+
+        let upper_len = address - adr_lower;
+        let lower_len = 8 - upper_len;
+
+        // instead of keeping only that which inside the bitmask, in this case
+        // we actually want to replace those parts.
+
+        let lower_existing = self.load64aligned(tick, adr_lower).ok_or(())?;
+        let upper_existing = self.load64aligned(tick, adr_upper).ok_or(())?;
+
+        let lower_existing = lower_existing & !Self::get_upper_bitmask(lower_len); // note the reversed upper
+        let lower_overwrite = value >> (upper_len * 8);
+        let lower = lower_existing | lower_overwrite;
+
+        let upper_existing = upper_existing & !Self::get_lower_bitmask(upper_len);
+        let upper_overwrite = value << (lower_len * 8);
+        let upper = upper_existing | upper_overwrite;
+
+        self.store64aligned(tick, adr_lower, lower)?;
+        self.store64aligned(tick, adr_upper, upper)?;
+
+        Ok(())
     }
 }
 
@@ -200,6 +228,20 @@ mod tests {
         for a in 8..16 {
             assert_eq!(HistMem::align_down(a), 8);
         }
+    }
+
+    #[test]
+    fn stores() {
+        const TICK: u32 = 555;
+        let mut v = HistMem::new();
+
+        v.store64aligned(TICK - 1, 0, 0x1111111111111111).unwrap();
+        v.store64aligned(TICK - 1, 8, 0x2222222222222222).unwrap();
+
+        v.store64(TICK, 1, 0xFFFFFFFFFFFFFFFF).unwrap();
+
+        assert_eq!(v.load64aligned(TICK, 0), Some(0x11FFFFFFFFFFFFFF));
+        assert_eq!(v.load64aligned(TICK, 8), Some(0xFF22222222222222));
     }
 
     #[test]
