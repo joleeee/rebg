@@ -137,17 +137,13 @@ impl TraceDumper {
                 .iter()
                 .filter(|m| matches!(m.kind, MemoryOpKind::Write))
             {
-                let res = match op.value {
+                match op.value {
                     MemoryValue::Byte(b) => mem.store8(tick as u32, op.address, b),
                     MemoryValue::Word(w) => mem.store16(tick as u32, op.address, w),
                     MemoryValue::Dword(d) => mem.store32(tick as u32, op.address, d),
                     MemoryValue::Qword(q) => mem.store64(tick as u32, op.address, q),
-                };
-                if let Err(e) = res {
-                    println!("Store failed {:x?} @ {:x}: {:?}", op.value, op.address, e);
-                } else {
-                    // println!("Store succeeded {:?}", op.value);
                 }
+                .unwrap();
             }
 
             // do for the PREVIOUS branch
