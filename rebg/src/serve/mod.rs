@@ -1,5 +1,6 @@
 use crate::analyzer::Analysis;
 use crate::dis::regs::Reg;
+use crate::state::MemoryOpKind;
 use crate::{
     arch::Arch,
     state::{State, Step},
@@ -124,8 +125,24 @@ fn handle<STEP, const N: usize>(
                     })
                     .collect();
 
+                let (mem_reads, mem_writes) = {
+                    let mut reads = Vec::new();
+                    let mut writes = Vec::new();
+
+                    for op in step.memory_ops() {
+                        let deserialized = op.value.as_u64();
+
+                        match op.kind {
+                            MemoryOpKind::Read => reads.push((op.address, deserialized)),
+                            MemoryOpKind::Write => writes.push((op.address, deserialized)),
+                        }
+                    }
+
+                    (reads, writes)
+                };
+
                 let serialized =
-                    serde_json::to_string(&json!({"registers": {"idx": idx, "registers": pairs}}))
+                    serde_json::to_string(&json!({"registers": {"idx": idx, "registers": pairs}, "mem_ops": {"r": mem_reads, "w": mem_writes}}))
                         .unwrap();
 
                 ws.send(tungstenite::Message::Text(serialized)).unwrap();
