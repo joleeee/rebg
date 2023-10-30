@@ -234,6 +234,48 @@ impl HistMem {
 
         Ok(())
     }
+
+    pub fn store16(&mut self, tick: u32, address: u64, value: u16) -> Result<(), ()> {
+        let adr_lower = Self::align_down(address);
+        let adr_upper = Self::align_down(address + 1);
+
+        let upper_len = address - adr_lower;
+        let lower_len = 8 - upper_len;
+
+        // instead of keeping only that which inside the bitmask, in this case
+        // we actually want to replace those parts.
+
+        let lower_existing = self.load64aligned(tick, adr_lower).ok_or(())?;
+        let upper_existing = self.load64aligned(tick, adr_upper).ok_or(())?;
+
+        let lower_mask = {
+            let lower_mask_r = Self::get_upper_bitmask(lower_len);
+            let lower_mask_l = Self::get_lower_bitmask(upper_len + 2); // if we go too large, we just get 8
+
+            lower_mask_r & lower_mask_l
+        };
+
+        let lower = {
+            let lower_existing = lower_existing & !lower_mask; // note the reversed upper
+            let lower_overwrite = ((value as u64) << 48) >> (upper_len * 8);
+            lower_existing | lower_overwrite
+        };
+
+        let upper_mask = Self::get_lower_bitmask(2u64.saturating_sub(lower_len));
+        let upper_existing = upper_existing & !upper_mask;
+
+        let upper_overwrite = (value as u64) << min(lower_len * 8 + 48, 48);
+        let upper = upper_existing | upper_overwrite;
+
+        if lower_mask != 0 {
+            self.store64aligned(tick, adr_lower, lower)?;
+        }
+        if upper_mask != 0 {
+            self.store64aligned(tick, adr_upper, upper)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -319,6 +361,26 @@ mod tests {
 
         assert_eq!(v.load64aligned(TICK + 30, 0), Some(0x0011223344556677));
         assert_eq!(v.load64aligned(TICK + 30, 8), Some(0x8899aabbbbbbbb00));
+
+        // u16
+        v.store64aligned(TICK + 100, 0, 0x4444444444444444).unwrap();
+        v.store64aligned(TICK + 100, 8, 0x4444444444444444).unwrap();
+
+        v.store16(TICK + 101, 0, 0xffff).unwrap();
+        v.store16(TICK + 102, 2, 0xeeee).unwrap();
+        v.store16(TICK + 103, 4, 0xdddd).unwrap();
+        v.store16(TICK + 104, 5, 0x9999).unwrap();
+        v.store16(TICK + 105, 6, 0x8888).unwrap();
+        v.store16(TICK + 106, 7, 0x7777).unwrap();
+        v.store16(TICK + 107, 8, 0x6666).unwrap();
+        v.store16(TICK + 108, 9, 0x5555).unwrap();
+        v.store16(TICK + 109, 10, 0x0000).unwrap();
+
+        // println!("{:016x}", v.load64aligned(TICK + 110, 0).unwrap());
+        // println!("{:016x}", v.load64aligned(TICK + 110, 8).unwrap());
+
+        assert_eq!(v.load64aligned(TICK + 110, 0), Some(0xffffeeeedd998877));
+        assert_eq!(v.load64aligned(TICK + 110, 8), Some(0x6655000044444444));
     }
 
     #[test]
