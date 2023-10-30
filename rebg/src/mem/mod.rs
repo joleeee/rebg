@@ -19,11 +19,17 @@ impl MCell {
     }
 
     fn add_tick(&mut self, tick: u32, value: u64) -> Result<(), ()> {
-        if Some(tick) <= self.values.last().map(|x| x.0) {
-            return Err(());
+        if Some(tick) < self.values.last().map(|x| x.0) {
+            Err(())
+            // note, this is not a comparison \/
+        } else if let Some((t, v)) = self.values.last_mut() {
+            *t = tick;
+            *v = value;
+            Ok(())
+        } else {
+            self.values.push((tick, value));
+            Ok(())
         }
-        self.values.push((tick, value));
-        Ok(())
     }
 
     fn at_tick(&self, tick: u32) -> Option<u64> {
@@ -333,6 +339,15 @@ mod tests {
         for a in 8..16 {
             assert_eq!(HistMem::align_down(a), 8);
         }
+    }
+
+    #[test]
+    fn overlapping_stores() {
+        let mut m = HistMem::new();
+        m.store64aligned(0, 0x1234, 0x1111111111111111).unwrap();
+        m.store64aligned(0, 0x1234, 0x2222222222222222).unwrap();
+
+        assert_eq!(m.load64aligned(0, 0x1234), Some(0x2222222222222222))
     }
 
     #[test]
