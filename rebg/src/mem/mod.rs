@@ -4,3 +4,5 @@
 
 pub mod qword;
 pub use qword::{HistMem, MCell};
+
+pub mod byte;
