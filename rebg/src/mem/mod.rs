@@ -1,6 +1,6 @@
 //!
 
-use std::collections::HashMap;
+use std::{cmp::min, collections::HashMap};
 
 // We want to keep track of all memory. We do this by having a slot of each
 // 64bit of memory, and then when it changes, adding an update.
@@ -192,6 +192,53 @@ impl HistMem {
 
         Ok(())
     }
+
+    pub fn store32(&mut self, tick: u32, address: u64, value: u32) -> Result<(), ()> {
+        let adr_lower = Self::align_down(address);
+        let adr_upper = Self::align_down(address + 3);
+
+        let upper_len = address - adr_lower;
+        let lower_len = 8 - upper_len;
+
+        // instead of keeping only that which inside the bitmask, in this case
+        // we actually want to replace those parts.
+
+        let lower_existing = self.load64aligned(tick, adr_lower).ok_or(())?;
+        let upper_existing = self.load64aligned(tick, adr_upper).ok_or(())?;
+
+        let lower_mask = {
+            let lower_mask_r = Self::get_upper_bitmask(lower_len);
+            let lower_mask_l = Self::get_lower_bitmask(upper_len + 4); // if we go too large, we just get 8
+
+            lower_mask_r & lower_mask_l
+        };
+
+        let lower = {
+            let lower_existing = lower_existing & !lower_mask; // note the reversed upper
+            let lower_overwrite = ((value as u64) << 32) >> (upper_len * 8);
+            lower_existing | lower_overwrite
+        };
+
+        let upper_mask = {
+            let upper_mask_r = Self::get_upper_bitmask(lower_len + 99);
+            let upper_mask_l = Self::get_lower_bitmask(4u64.saturating_sub(lower_len));
+
+            upper_mask_l & upper_mask_r
+        };
+        let upper_existing = upper_existing & !upper_mask;
+
+        let upper_overwrite = (value as u64) << min(lower_len * 8 + 32, 48);
+        let upper = upper_existing | upper_overwrite;
+
+        if lower_mask != 0 {
+            self.store64aligned(tick, adr_lower, lower)?;
+        }
+        if upper_mask != 0 {
+            self.store64aligned(tick, adr_upper, upper)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -238,10 +285,45 @@ mod tests {
         v.store64aligned(TICK - 1, 0, 0x1111111111111111).unwrap();
         v.store64aligned(TICK - 1, 8, 0x2222222222222222).unwrap();
 
+        // u64
         v.store64(TICK, 1, 0xFFFFFFFFFFFFFFFF).unwrap();
 
         assert_eq!(v.load64aligned(TICK, 0), Some(0x11FFFFFFFFFFFFFF));
         assert_eq!(v.load64aligned(TICK, 8), Some(0xFF22222222222222));
+
+        // u32
+        v.store32(TICK + 1, 7, 0x77777777).unwrap();
+        assert_eq!(v.load64aligned(TICK + 1, 0), Some(0x11FFFFFFFFFFFF77));
+        assert_eq!(v.load64aligned(TICK + 1, 8), Some(0x7777772222222222));
+
+        v.store32(TICK + 2, 1, 0x44444444).unwrap();
+        assert_eq!(v.load64aligned(TICK + 2, 0), Some(0x1144444444FFFF77));
+        assert_eq!(v.load64aligned(TICK + 2, 8), Some(0x7777772222222222));
+
+        v.store32(TICK + 3, 2, 0x55555555).unwrap();
+        assert_eq!(v.load64aligned(TICK + 3, 0), Some(0x114455555555FF77));
+        assert_eq!(v.load64aligned(TICK + 3, 8), Some(0x7777772222222222));
+
+        v.store32(TICK + 4, 5, 0x66666666).unwrap();
+        assert_eq!(v.load64aligned(TICK + 4, 0), Some(0x1144555555666666));
+        assert_eq!(v.load64aligned(TICK + 4, 8), Some(0x6677772222222222));
+
+        v.store32(TICK + 5, 10, 0x99999999).unwrap();
+        assert_eq!(v.load64aligned(TICK + 5, 0), Some(0x1144555555666666));
+        assert_eq!(v.load64aligned(TICK + 5, 8), Some(0x6677999999992222));
+
+        v.store64aligned(TICK + 6, 0, 0x0000000000000000).unwrap();
+        v.store64aligned(TICK + 6, 8, 0x0000000000000000).unwrap();
+        for i in 1..12 {
+            let mut val = 0;
+            for ind in 0..8 {
+                val |= i << (ind * 4);
+            }
+            v.store32(TICK + 7 + i, i.into(), val as u32).unwrap();
+        }
+
+        assert_eq!(v.load64aligned(TICK + 30, 0), Some(0x0011223344556677));
+        assert_eq!(v.load64aligned(TICK + 30, 8), Some(0x8899aabbbbbbbb00));
     }
 
     #[test]
