@@ -219,12 +219,7 @@ impl HistMem {
             lower_existing | lower_overwrite
         };
 
-        let upper_mask = {
-            let upper_mask_r = Self::get_upper_bitmask(lower_len + 99);
-            let upper_mask_l = Self::get_lower_bitmask(4u64.saturating_sub(lower_len));
-
-            upper_mask_l & upper_mask_r
-        };
+        let upper_mask = Self::get_lower_bitmask(4u64.saturating_sub(lower_len));
         let upper_existing = upper_existing & !upper_mask;
 
         let upper_overwrite = (value as u64) << min(lower_len * 8 + 32, 48);
