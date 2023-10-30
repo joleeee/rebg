@@ -7,6 +7,7 @@
 
 use std::{cmp::min, collections::HashMap};
 
+#[derive(Debug)]
 pub struct MCell {
     values: Vec<(u32, u64)>,
 }
@@ -17,17 +18,23 @@ impl MCell {
     }
 
     fn add_tick(&mut self, tick: u32, value: u64) -> Result<(), ()> {
+        // is there already a tick after what we're adding?
         if Some(tick) < self.values.last().map(|x| x.0) {
-            Err(())
-            // note, this is not a comparison \/
-        } else if let Some((t, v)) = self.values.last_mut() {
-            *t = tick;
-            *v = value;
-            Ok(())
-        } else {
-            self.values.push((tick, value));
-            Ok(())
+            return Err(());
         }
+
+        // is the previous tick equal to the current tick?
+        if let Some((t, v)) = self.values.last_mut() {
+            // note,       /\ this is not a comparison
+            if *t == tick {
+                *v = value;
+                return Ok(());
+            }
+        }
+
+        // otherwise, we can just push!
+        self.values.push((tick, value));
+        Ok(())
     }
 
     fn at_tick(&self, tick: u32) -> Option<u64> {
@@ -320,6 +327,8 @@ mod tests {
         cell.add_tick(4, 0x11).unwrap();
         cell.add_tick(7, 0x22).unwrap();
         cell.add_tick(8, 0x33).unwrap();
+
+        dbg!(&cell);
 
         assert_eq!(cell.at_tick(0), None);
         assert_eq!(cell.at_tick(3), None);
