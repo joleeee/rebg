@@ -62,7 +62,6 @@ pub struct Instrumentation {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MemoryOpKind {
-    #[allow(dead_code)]
     Read,
     Write,
 }

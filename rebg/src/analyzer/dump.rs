@@ -1,7 +1,8 @@
 use crate::analyzer::Analysis;
 use crate::binary::Binary;
 use crate::dis::{self, Dis, Instruction};
-use crate::state::{Branching, Instrument};
+use crate::mem::HistMem;
+use crate::state::{Branching, Instrument, MemoryValue};
 use crate::{
     arch::Arch,
     host::Host,
@@ -122,11 +123,32 @@ impl TraceDumper {
         let mut bt = Vec::new();
         let mut bt_lens = Vec::new();
 
-        for cur_step in &trace {
+        let mut mem = HistMem::new();
+
+        for (tick, cur_step) in trace.iter().enumerate() {
             let (insn, instrumentation) = analyzer.step(launcher, cur_step);
             instrumentations.push(instrumentation);
             insns.push(insn);
             let prev_instrumentation = instrumentations.iter().rev().nth(1);
+
+            // apply memory operations
+            for op in cur_step
+                .memory_ops()
+                .iter()
+                .filter(|m| matches!(m.kind, MemoryOpKind::Write))
+            {
+                let res = match op.value {
+                    MemoryValue::Byte(b) => mem.store8(tick as u32, op.address, b),
+                    MemoryValue::Word(w) => mem.store16(tick as u32, op.address, w),
+                    MemoryValue::Dword(d) => mem.store32(tick as u32, op.address, d),
+                    MemoryValue::Qword(q) => mem.store64(tick as u32, op.address, q),
+                };
+                if let Err(e) = res {
+                    println!("Store failed {:x?} @ {:x}: {:?}", op.value, op.address, e);
+                } else {
+                    // println!("Store succeeded {:?}", op.value);
+                }
+            }
 
             // do for the PREVIOUS branch
             match prev_instrumentation {

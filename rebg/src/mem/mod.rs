@@ -51,8 +51,7 @@ pub struct HistMem {
 }
 
 impl HistMem {
-    #[allow(dead_code)]
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             cells: HashMap::new(),
         }
@@ -174,6 +173,12 @@ impl HistMem {
 
     pub fn store64(&mut self, tick: u32, address: u64, value: u64) -> Result<(), ()> {
         let adr_lower = Self::align_down(address);
+
+        if adr_lower == address {
+            self.store64aligned(tick, address, value)?;
+            return Ok(());
+        }
+
         let adr_upper = Self::align_down(address + 7);
 
         let upper_len = address - adr_lower;
