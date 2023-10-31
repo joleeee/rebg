@@ -24,5 +24,13 @@
 </script>
 
 <div>
-    <span style={rwCssEntry(r, w)}>{Address}</span>&nbsp;{Arrow}&nbsp;<span>{Value}</span>
+    <span style={rwCssEntry(r, w)}>{Address}</span>&nbsp;{Arrow}&nbsp;<span
+        >{Value}</span
+    >
 </div>
+
+<style>
+    div {
+        font-family: monospace;
+    }
+</style>
