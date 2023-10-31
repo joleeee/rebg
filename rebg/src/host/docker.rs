@@ -59,6 +59,7 @@ impl DockerSpawner {
                 Config {
                     host_config: Some(bollard::service::HostConfig {
                         binds: Some(vec![path_mount]),
+                        extra_hosts: Some(vec!["host.docker.internal:host-gateway".into()]),
                         ..Default::default()
                     }),
                     image: Some(self.image.clone()),
