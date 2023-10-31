@@ -8,10 +8,10 @@ const readFg = "#888800"; // dark yellow
 export function rwCssEntry(read, write) {
     let left = "";
     let right = "";
-    if(read && write) {
+    if (read && write) {
         left = readFg;
         right = writeFg;
-    } else if(read) {
+    } else if (read) {
         left = readFg;
         right = readFg;
     } else if (write) {
@@ -20,8 +20,6 @@ export function rwCssEntry(read, write) {
     } else {
         return "";
     }
-
-
 
     return `background: linear-gradient(90deg, ${left} 15%, ${right} 85%); color: ${modTextColor}`;
 }
