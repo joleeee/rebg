@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolReference<'a> {
@@ -71,16 +72,16 @@ impl SymbolTable {
     }
 
     /// Extend an existing elf with more debug symbols
-    pub fn extend_with_debug(self, debug: &goblin::elf::Elf, from: u64, to: u64) -> Self {
+    pub fn extend_with_debug(self, debug_elf: &goblin::elf::Elf, from: u64, to: u64) -> Self {
         // TODO support different vaddr and paddr
-        for ph in &debug.program_headers {
+        for ph in &debug_elf.program_headers {
             assert_eq!(ph.p_vaddr, ph.p_paddr);
         }
 
-        let syms = Self::intermediary_symbols(debug);
+        let syms = Self::intermediary_symbols(debug_elf);
 
         for o in &self.offsets {
-            println!("offset: {:#x} {:#x}", o.addr, o.addr + o.size);
+            debug!("offset: {:#x} {:#x}", o.addr, o.addr + o.size);
         }
 
         let mut symbols = self.symbols;
@@ -128,7 +129,7 @@ impl SymbolTable {
             });
         }
 
-        println!("Now {} symbols", symbols.len());
+        debug!("Now {} symbols", symbols.len());
 
         Self { symbols, ..self }
     }

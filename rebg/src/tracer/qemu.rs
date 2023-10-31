@@ -1,4 +1,5 @@
 use anyhow::Context;
+use tracing::info;
 
 use super::{ParsedStep, Tracer, TracerCmd};
 use crate::{arch::Arch, state::Step};
@@ -128,9 +129,9 @@ impl<STEP, const N: usize> QEMUParser<STEP, N> {
     fn new(proc: Child) -> Self {
         let listener = TcpListener::bind("[::]:1337").unwrap();
 
-        println!("Waiting for connection...");
+        info!("Waiting for connection...");
         let con = listener.incoming().next().unwrap().unwrap();
-        println!("Connected! {:?}", con);
+        info!("Connected! {:?}", con);
         drop(listener); // close the socket, keep the connection, me THINKS
 
         let reader = BufReader::new(con);

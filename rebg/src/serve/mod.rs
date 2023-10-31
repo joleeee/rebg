@@ -9,6 +9,7 @@ use itertools::Itertools;
 use serde_json::json;
 use std::fmt;
 use std::net::{TcpListener, TcpStream};
+use tracing::info;
 use tungstenite::{accept, WebSocket};
 
 pub fn ws<STEP, const N: usize>(analysis: Analysis<STEP, N>, arch: Arch)
@@ -24,7 +25,7 @@ where
                     s.spawn(|| handle(ws, &analysis, arch));
                 }
                 e => {
-                    println!("WS failed: {:?}", e);
+                    info!("WS failed: {:?}", e);
                 }
             }
         }
@@ -88,7 +89,7 @@ fn handle<STEP, const N: usize>(
                 continue;
             }
             tungstenite::Message::Close(frame) => {
-                println!("Closing: {:?}", frame);
+                info!("Closing: {:?}", frame);
                 break;
             }
             _ => continue,

@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
 };
+use tracing::info;
 
 use super::Host;
 use crate::arch::Arch;
@@ -188,7 +189,7 @@ impl Host for Docker {
 
     fn launch(&self, program: String, mut args: Vec<String>) -> Result<Child, Self::Error> {
         // run qemu inside the container
-        println!("Starting qemu");
+        info!("Starting qemu");
 
         let actual_program = args.last_mut().unwrap();
         *actual_program = format!(

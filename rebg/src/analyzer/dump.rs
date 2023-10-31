@@ -19,6 +19,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+use tracing::{debug, warn};
 
 /// Dumps the log
 pub struct TraceDumper {}
@@ -162,7 +163,7 @@ impl TraceDumper {
 
                         let is_invisible = cur_step.state().pc() == *return_address;
                         if is_invisible {
-                            println!(">>> INVISIBLE");
+                            debug!(">>> INVISIBLE");
                         } else {
                             bt.push(*return_address);
 
@@ -175,7 +176,7 @@ impl TraceDumper {
                                     String::new()
                                 }
                             };
-                            println!(">>> {:3} Calling {:x}{}", bt.len(), target, sym_txt);
+                            debug!(">>> {:3} Calling {:x}{}", bt.len(), target, sym_txt);
                         }
                     }
                     Branching::Return => {
@@ -312,7 +313,7 @@ impl SyscallState {
         let (name, args, ret) = decompose_syscall(raw).ok_or(SyscallError::BadFormat)?;
 
         let combined = args.join(", ");
-        println!("parsed: {}({}) -> {}", name, combined, ret);
+        debug!("parsed: {}({}) -> {}", name, combined, ret);
 
         match name.as_str() {
             "openat" => {
@@ -359,7 +360,7 @@ impl SyscallState {
                         .get(&fd)
                         .ok_or(SyscallError::UnknownFd)?
                         .to_string();
-                    println!("mmap {} {} {} {}", fd, path, offset, len);
+                    debug!("mmap {} {} {} {}", fd, path, offset, len);
 
                     Ok(Some(StateUpdate::Mmap {
                         path,
@@ -465,13 +466,13 @@ where
                 })) => {
                     let binary = Binary::from_path(launcher, Path::new(&path));
 
-                    println!("MEMMMM");
+                    debug!("MEMMMM");
 
                     if let Ok(binary) = binary {
                         let mut new_symbol_table = SymbolTable::from_elf(path, binary.elf());
 
                         if binary.elf().syms.is_empty() {
-                            eprintln!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
+                            debug!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
 
                             let buildid = binary.build_id();
 
@@ -500,7 +501,7 @@ where
                 }
                 Ok(None) => {}
                 Err(e) => {
-                    println!("Error decoding syscall: {:?}", e);
+                    warn!("Error decoding syscall: {:?}", e);
                 }
             }
         }
