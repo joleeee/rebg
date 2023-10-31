@@ -214,4 +214,8 @@ impl Host for Docker {
 
         Ok(child)
     }
+
+    fn localhost(&self) -> &'static str {
+        "host.docker.internal"
+    }
 }

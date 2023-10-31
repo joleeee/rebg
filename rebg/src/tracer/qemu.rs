@@ -23,14 +23,14 @@ where
 {
     type ITER = QEMUParser<STEP, N>;
 
-    fn command(&self, executable: &Path, arch: Arch) -> TracerCmd<STEP, N> {
+    fn command(&self, executable: &Path, arch: Arch, localhost: &str) -> TracerCmd<STEP, N> {
         let qemu = arch.qemu_user_bin().to_string();
 
         let options = vec![
             String::from("-rebglog"),
             String::from("/dev/null"),
             String::from("-rebgtcp"),
-            String::from("host.docker.internal:1337"),
+            format!("{localhost}:1337"),
             String::from("-one-insn-per-tb"),
             String::from("-d"),
             String::from("in_asm,strace"),

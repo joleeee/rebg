@@ -9,4 +9,6 @@ pub trait Host {
     type Error;
     fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error>;
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, Self::Error>;
+    /// where to send data (e.g. docker should sent to host machine)
+    fn localhost(&self) -> &'static str;
 }

@@ -41,4 +41,8 @@ impl Host for Native {
 
         Ok(child)
     }
+
+    fn localhost(&self) -> &'static str {
+        "localhost"
+    }
 }

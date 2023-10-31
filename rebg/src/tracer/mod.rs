@@ -21,7 +21,7 @@ where
     STEP: Step<N>,
 {
     type ITER: Iterator<Item = ParsedStep<STEP, N>>;
-    fn command(&self, executable: &Path, arch: Arch) -> TracerCmd<STEP, N>;
+    fn command(&self, executable: &Path, arch: Arch, localhost: &str) -> TracerCmd<STEP, N>;
     fn parse(&self, proc: Child) -> Self::ITER;
 }
 

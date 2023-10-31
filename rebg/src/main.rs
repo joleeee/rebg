@@ -76,6 +76,13 @@ impl Host for Launchers {
             Launchers::Native(x) => x.read_file(path),
         }
     }
+
+    fn localhost(&self) -> &'static str {
+        match self {
+            Launchers::Docker(x) => x.localhost(),
+            Launchers::Native(x) => x.localhost(),
+        }
+    }
 }
 
 fn main() {
@@ -134,7 +141,7 @@ where
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
 {
-    let cmd: TracerCmd<STEP, N> = tracer.command(program, arch);
+    let cmd: TracerCmd<STEP, N> = tracer.command(program, arch, launcher.localhost());
 
     let child = launcher.launch(cmd.program, cmd.args).unwrap();
 
