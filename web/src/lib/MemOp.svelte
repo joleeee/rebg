@@ -1,7 +1,12 @@
 <script>
+    import { rwCssEntry } from "./color";
+
     export let kind = "";
     export let adr = 0;
     export let value = 0;
+
+    $: r = kind == "r";
+    $: w = kind == "w";
 
     $: Address = "0x" + adr.toString(16);
     $: Value = "0x" + value.toString(16);
@@ -19,5 +24,5 @@
 </script>
 
 <div>
-    <span>{Address}</span>&nbsp;{Arrow}&nbsp;<span>{Value}</span>
+    <span style={rwCssEntry(r, w)}>{Address}</span>&nbsp;{Arrow}&nbsp;<span>{Value}</span>
 </div>
