@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
 };
-use tracing::info;
+use tracing::{debug, info};
 
 use super::Host;
 use crate::arch::Arch;
@@ -200,6 +200,8 @@ impl Host for Docker {
                 .to_str()
                 .unwrap()
         );
+
+        debug!("execing: {} {:?}", program, args);
 
         let child = Command::new("docker")
             .arg("exec")
