@@ -22,6 +22,10 @@ struct Arguments {
     #[argh(positional)]
     program: PathBuf,
 
+    #[argh(switch, short = 'q', long = "quit")]
+    /// quit instead of opening a ws server
+    quit: bool,
+
     #[argh(option, short = 'a')]
     /// override detected architecture (arm64, amd64, ...)
     target_arch: Option<Arch>,
@@ -76,6 +80,7 @@ impl Host for Launchers {
 fn main() {
     let Arguments {
         program,
+        quit,
         target_arch,
         launcher,
     } = argh::from_env();
@@ -97,13 +102,17 @@ fn main() {
                 launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, target_arch, &program);
             let analysis =
                 TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
-            serve::ws(analysis, target_arch);
+            if !quit {
+                serve::ws(analysis, target_arch);
+            }
         }
         Arch::X86_64 => {
             let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, target_arch, &program);
             let analysis =
                 TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
-            serve::ws(analysis, target_arch);
+            if !quit {
+                serve::ws(analysis, target_arch);
+            }
         }
     }
 }
