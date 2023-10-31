@@ -184,7 +184,8 @@
     function handle_action(action) {
         // this is important, js lmao (0 """is""" false)
         if (selected_idx === null) {
-            return;
+            // we want to be able to start moving around without using the mouse
+            selected_idx = 0;
         }
 
         const prev = selected_idx;
