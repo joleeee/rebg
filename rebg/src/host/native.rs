@@ -3,8 +3,7 @@ use std::{
     path::Path,
     process::{Child, Command, Stdio},
 };
-
-use tracing::info;
+use tracing::{debug, info};
 
 use super::Host;
 
@@ -31,6 +30,7 @@ impl Host for Native {
 
     fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error> {
         info!("Starting native");
+        debug!("{} {:?}", program, args);
 
         let child = Command::new(program)
             .args(args)
