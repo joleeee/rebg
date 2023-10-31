@@ -19,6 +19,5 @@
 </script>
 
 <div>
-    <span>{Address}</span>
-    {Arrow} <span>{Value}</span>
+    <span>{Address}</span>&nbsp;{Arrow}&nbsp;<span>{Value}</span>
 </div>
