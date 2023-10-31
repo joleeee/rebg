@@ -4,6 +4,8 @@ use std::{
     process::{Child, Command, Stdio},
 };
 
+use tracing::info;
+
 use super::Host;
 
 #[derive(argh::FromArgs)]
@@ -28,6 +30,8 @@ impl Host for Native {
     }
 
     fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error> {
+        info!("Starting native");
+
         let child = Command::new(program)
             .args(args)
             .stdin(Stdio::null()) // todo pass through from nc
