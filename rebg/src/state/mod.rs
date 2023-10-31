@@ -213,7 +213,7 @@ where
                         partial_strace = Some(content)
                     }
                 }
-                "st" => {
+                "st" | "ld" => {
                     let (bits, rest) = content.split_once('|').unwrap();
 
                     let bits = i32::from_str_radix(bits, 10).unwrap();
@@ -230,9 +230,15 @@ where
                         _ => return Err(anyhow::anyhow!("unknown value size: {} bits", bits)),
                     };
 
+                    let kind = match what {
+                        "st" => MemoryOpKind::Write,
+                        "ld" => MemoryOpKind::Read,
+                        _ => unreachable!(),
+                    };
+
                     memory_ops.push(MemoryOp {
                         address: ptr,
-                        kind: MemoryOpKind::Write,
+                        kind,
                         value,
                     });
                 }
