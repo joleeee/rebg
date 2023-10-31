@@ -46,9 +46,14 @@ Most is not documented, if you find anything that's not obvious, please just
 send me an email or open an issue!
 
 ## Build the docker container(s)
-We use an augmented qemu to trace binaries, so compile them:
-```
+We use an augmented qemu to trace binaries, so compile it:
+```sh
 cd tools
+./build_all.sh
+```
+
+You can also invoke the commands manaully:
+```sh
 docker build --platform linux/arm64 . -t rebg:arm64
 docker build --platform linux/amd64 . -t rebg:amd64
 ```
