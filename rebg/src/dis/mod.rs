@@ -31,8 +31,8 @@ pub struct Instruction {
     pub write: Box<[Reg]>,
 
     // string stuff
-    pub mnemonic: Option<String>,
-    pub op_str: Option<String>,
+    pub mnemonic: Option<Box<str>>,
+    pub op_str: Option<Box<str>>,
 
     // blah
     pub operands: Box<[capstone::arch::ArchOperand]>,
@@ -85,8 +85,8 @@ impl Dis {
             len: insn.len(),
             read,
             write,
-            mnemonic: insn.mnemonic().map(str::to_string),
-            op_str: insn.op_str().map(str::to_string),
+            mnemonic: insn.mnemonic().map(|s| s.into()),
+            op_str: insn.op_str().map(|s| s.into()),
             operands: operands.into_boxed_slice(),
             groups,
         })

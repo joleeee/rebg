@@ -150,7 +150,7 @@ impl Instrument for Aarch64Instrument {
         assert!(!(is_call_insn && is_ret_insn));
 
         if is_call_insn {
-            let mnem = insn.mnemonic.as_ref().unwrap();
+            let mnem = insn.mnemonic.as_ref().unwrap().as_ref();
             let return_address = insn.address + insn.len as u64;
 
             let operand = {
@@ -163,7 +163,7 @@ impl Instrument for Aarch64Instrument {
                 _ => panic!("nah"),
             };
 
-            match mnem.as_str() {
+            match mnem {
                 "bl" => {
                     let operand_val = match operand.op_type {
                         capstone::arch::arm64::Arm64OperandType::Imm(val) => val,

@@ -4,6 +4,7 @@ export const sendStore = writable(null);
 export const connectedStore = writable(false);
 
 export const registerStore = writable(null);
+export const memOpsStore = writable(null);
 export const stepStore = writable(null, () => {
     const socket = new WebSocket("ws://localhost:9001");
 
@@ -19,6 +20,9 @@ export const stepStore = writable(null, () => {
         }
         if (msgs.hasOwnProperty("registers")) {
             registerStore.set(msgs.registers);
+        }
+        if (msgs.hasOwnProperty("mem_ops")) {
+            memOpsStore.set(msgs.mem_ops);
         }
     });
 
