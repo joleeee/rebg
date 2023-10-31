@@ -14,7 +14,7 @@ use rebg::{
 use std::fmt;
 use std::path::Path;
 use std::{fs, path::PathBuf};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{fmt as tracing_fmt, EnvFilter};
 
 #[derive(argh::FromArgs)]
 /// tracer
@@ -79,8 +79,9 @@ impl Host for Launchers {
 }
 
 fn main() {
-    let subscriber = FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+    tracing_fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 
     let Arguments {
         program,
