@@ -27,14 +27,33 @@
 </script>
 
 <div class="outer">
-    {#each regs as r}
-        <Reg name={r[0]} value={r[1]} mod={r[2]}/>
-    {/each}
+    <div class="inner">
+        {#each regs.slice(0, Math.ceil(regs.length / 2)) as r}
+            <Reg name={r[0]} value={r[1]} mod={r[2]} />
+        {/each}
+    </div>
+    <div class="inner">
+        {#each regs.slice(Math.ceil(regs.length / 2)) as r}
+            <Reg name={r[0]} value={r[1]} mod={r[2]} />
+        {/each}
+    </div>
 </div>
 
 <style>
     .outer {
         padding: 0;
         margin: 0;
+        display: flex;
+    }
+    .inner {
+        /* 
+           1em is approx 2 chars
+           value: 64bit = 8 byte = 16 letters
+           prefix: 2 letters
+           name: 3 letters
+           sep: 1 letter
+           sum: 22 letters
+        */
+        min-width: 11em;
     }
 </style>
