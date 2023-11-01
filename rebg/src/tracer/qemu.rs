@@ -70,6 +70,7 @@ enum Header {
     Registers = 0x77,
     // FLAGS = 0x78,
     Syscall = 0x99,
+    SyscallResult = 0x9a,
 }
 
 impl TryFrom<u8> for Header {
@@ -86,6 +87,7 @@ impl TryFrom<u8> for Header {
             0x77 => Ok(Self::Registers),
             // 0x78 => Ok(Self::FLAGS),
             0x99 => Ok(Self::Syscall),
+            0x9a => Ok(Self::SyscallResult),
             _ => Err(()),
         }
     }
@@ -206,6 +208,20 @@ impl Header {
 
                 Message::Syscall(string)
             }
+            Header::SyscallResult => {
+                let mut buf = [0; 8];
+
+                reader.read_exact(&mut buf).unwrap();
+                let len = u64::from_le_bytes(buf);
+
+                let string = {
+                    let mut strbuf = vec![0; len as usize];
+                    reader.read_exact(&mut strbuf).unwrap();
+                    String::from_utf8(strbuf).unwrap().into_boxed_str()
+                };
+
+                Message::SyscallResult(string)
+            }
         }
     }
 }
@@ -221,6 +237,7 @@ pub enum Message {
     Load(u64, u64, u8),
     Store(u64, u64, u8),
     Syscall(Box<str>),
+    SyscallResult(Box<str>),
 }
 
 #[derive(Clone, Debug)]

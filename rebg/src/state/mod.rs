@@ -145,6 +145,7 @@ where
         let mut s_code = None;
 
         let mut strace = None;
+        let mut strace_result = None;
 
         let mut memory_ops = vec![];
 
@@ -182,10 +183,16 @@ where
                     });
                 }
                 Message::Syscall(s) => strace = Some(s.to_string()),
+                Message::SyscallResult(s) => strace_result = Some(s.to_string()),
 
                 Message::LibLoad(_, _, _) | Message::Separator => panic!("really shouldnt happen"),
             }
         }
+
+        let strace = strace.map(|mut strace| {
+            strace.push_str(&strace_result.unwrap_or_default());
+            strace
+        });
 
         let address = s_address.unwrap();
         let code = s_code.unwrap();
