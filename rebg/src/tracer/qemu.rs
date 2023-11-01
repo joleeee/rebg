@@ -1,4 +1,3 @@
-use tracing::info;
 use super::{ParsedStep, Tracer, TracerCmd};
 use crate::{arch::Arch, state::Step};
 use std::{
@@ -10,6 +9,7 @@ use std::{
     path::Path,
     process::Child,
 };
+use tracing::info;
 
 pub struct QEMU {}
 
@@ -61,15 +61,15 @@ pub struct QEMUParser<STEP, const N: usize> {
 
 #[derive(Debug)]
 enum Header {
-    SEPARATOR = 0x55,
-    LIBLOAD = 0xee,
-    ADDRESS = 0xaa,
-    CODE = 0xff,
-    LOAD = 0x33,
-    STORE = 0x44,
-    REGISTERS = 0x77,
+    Separator = 0x55,
+    Libload = 0xee,
+    Address = 0xaa,
+    Code = 0xff,
+    Load = 0x33,
+    STore = 0x44,
+    Registers = 0x77,
     // FLAGS = 0x78,
-    SYSCALL = 0x99,
+    Syscall = 0x99,
 }
 
 impl TryFrom<u8> for Header {
@@ -77,15 +77,15 @@ impl TryFrom<u8> for Header {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x55 => Ok(Self::SEPARATOR),
-            0xee => Ok(Self::LIBLOAD),
-            0xaa => Ok(Self::ADDRESS),
-            0xff => Ok(Self::CODE),
-            0x33 => Ok(Self::LOAD),
-            0x44 => Ok(Self::STORE),
-            0x77 => Ok(Self::REGISTERS),
+            0x55 => Ok(Self::Separator),
+            0xee => Ok(Self::Libload),
+            0xaa => Ok(Self::Address),
+            0xff => Ok(Self::Code),
+            0x33 => Ok(Self::Load),
+            0x44 => Ok(Self::STore),
+            0x77 => Ok(Self::Registers),
             // 0x78 => Ok(Self::FLAGS),
-            0x99 => Ok(Self::SYSCALL),
+            0x99 => Ok(Self::Syscall),
             _ => Err(()),
         }
     }
@@ -94,7 +94,7 @@ impl TryFrom<u8> for Header {
 impl Header {
     fn deserialize<R: Read>(&self, reader: &mut R) -> Message {
         match self {
-            Header::LIBLOAD => {
+            Header::Libload => {
                 let mut buf = [0; 8];
 
                 reader.read_exact(&mut buf).unwrap();
@@ -114,13 +114,13 @@ impl Header {
 
                 Message::LibLoad(name, from, to)
             }
-            Header::SEPARATOR => Message::Separator,
-            Header::ADDRESS => {
+            Header::Separator => Message::Separator,
+            Header::Address => {
                 let mut buf = [0; 8];
                 reader.read_exact(&mut buf).unwrap();
                 Message::Address(u64::from_le_bytes(buf))
             }
-            Header::CODE => {
+            Header::Code => {
                 let mut buf = [0; 8];
                 reader.read_exact(&mut buf).unwrap();
                 let len = u64::from_le_bytes(buf);
@@ -130,7 +130,7 @@ impl Header {
 
                 Message::Code(code.into_boxed_slice())
             }
-            Header::LOAD => {
+            Header::Load => {
                 let size = {
                     let mut bytebuf = [0; 1];
                     reader.read_exact(&mut bytebuf).unwrap();
@@ -147,7 +147,7 @@ impl Header {
 
                 Message::Load(adr, value, size)
             }
-            Header::STORE => {
+            Header::STore => {
                 let size = {
                     let mut bytebuf = [0; 1];
                     reader.read_exact(&mut bytebuf).unwrap();
@@ -164,7 +164,7 @@ impl Header {
 
                 Message::Store(adr, value, size)
             }
-            Header::REGISTERS => {
+            Header::Registers => {
                 let count = {
                     let mut bytebuf = [0; 1];
                     reader.read_exact(&mut bytebuf).unwrap();
@@ -192,7 +192,7 @@ impl Header {
                     regs: regs.into_boxed_slice(),
                 })
             }
-            Header::SYSCALL => {
+            Header::Syscall => {
                 let mut buf = [0; 8];
 
                 reader.read_exact(&mut buf).unwrap();
@@ -236,15 +236,13 @@ fn get_next_message<R: Read>(reader: &mut R) -> Option<Message> {
     reader.read_exact(&mut header).ok()?;
 
     // println!("Header: {:x}", header[0]);
-    let header: Header = header[0]
-        .try_into()
-        .unwrap_or_else(|_| {
-            let mut data = [0; 16];
-            reader.read_exact(&mut data).unwrap();
-            println!("following: {:02x?}", data);
-            panic!();
-        });
-        // .expect(&format!("Unknown header 0x{:x}", header[0]));
+    let header: Header = header[0].try_into().unwrap_or_else(|_| {
+        let mut data = [0; 16];
+        reader.read_exact(&mut data).unwrap();
+        println!("following: {:02x?}", data);
+        panic!();
+    });
+    // .expect(&format!("Unknown header 0x{:x}", header[0]));
 
     let msg = header.deserialize(reader);
 
