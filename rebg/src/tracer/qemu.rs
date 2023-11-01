@@ -1,12 +1,9 @@
-use anyhow::Context;
 use tracing::info;
-
 use super::{ParsedStep, Tracer, TracerCmd};
 use crate::{arch::Arch, state::Step};
 use std::{
-    collections::HashMap,
     fmt,
-    io::{BufRead, BufReader},
+    io::{BufReader, Read},
     marker::PhantomData,
     mem,
     net::{TcpListener, TcpStream},
@@ -19,7 +16,7 @@ pub struct QEMU {}
 impl<STEP, const N: usize> Tracer<STEP, N> for QEMU
 where
     STEP: Step<N> + Send + 'static + fmt::Debug,
-    STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
+    STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
 {
     type ITER = QEMUParser<STEP, N>;
 
@@ -62,10 +59,202 @@ pub struct QEMUParser<STEP, const N: usize> {
     _phantom: PhantomData<STEP>,
 }
 
+#[derive(Debug)]
+enum Header {
+    SEPARATOR = 0x55,
+    LIBLOAD = 0xee,
+    ADDRESS = 0xaa,
+    CODE = 0xff,
+    LOAD = 0x33,
+    STORE = 0x44,
+    REGISTERS = 0x77,
+    // FLAGS = 0x78,
+    SYSCALL = 0x99,
+}
+
+impl TryFrom<u8> for Header {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x55 => Ok(Self::SEPARATOR),
+            0xee => Ok(Self::LIBLOAD),
+            0xaa => Ok(Self::ADDRESS),
+            0xff => Ok(Self::CODE),
+            0x33 => Ok(Self::LOAD),
+            0x44 => Ok(Self::STORE),
+            0x77 => Ok(Self::REGISTERS),
+            // 0x78 => Ok(Self::FLAGS),
+            0x99 => Ok(Self::SYSCALL),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Header {
+    fn deserialize<R: Read>(&self, reader: &mut R) -> Message {
+        match self {
+            Header::LIBLOAD => {
+                let mut buf = [0; 8];
+
+                reader.read_exact(&mut buf).unwrap();
+                let len = u64::from_le_bytes(buf);
+
+                let name = {
+                    let mut strbuf = vec![0; len as usize];
+                    reader.read_exact(&mut strbuf).unwrap();
+                    String::from_utf8(strbuf).unwrap().into_boxed_str()
+                };
+
+                reader.read_exact(&mut buf).unwrap();
+                let from = u64::from_le_bytes(buf);
+
+                reader.read_exact(&mut buf).unwrap();
+                let to = u64::from_le_bytes(buf);
+
+                Message::LibLoad(name, from, to)
+            }
+            Header::SEPARATOR => Message::Separator,
+            Header::ADDRESS => {
+                let mut buf = [0; 8];
+                reader.read_exact(&mut buf).unwrap();
+                Message::Address(u64::from_le_bytes(buf))
+            }
+            Header::CODE => {
+                let mut buf = [0; 8];
+                reader.read_exact(&mut buf).unwrap();
+                let len = u64::from_le_bytes(buf);
+
+                let mut code = vec![0; len as usize];
+                reader.read_exact(&mut code).unwrap();
+
+                Message::Code(code.into_boxed_slice())
+            }
+            Header::LOAD => {
+                let size = {
+                    let mut bytebuf = [0; 1];
+                    reader.read_exact(&mut bytebuf).unwrap();
+                    u8::from_le_bytes(bytebuf)
+                };
+
+                let mut buf = [0; 8];
+
+                reader.read_exact(&mut buf).unwrap();
+                let adr = u64::from_le_bytes(buf);
+
+                reader.read_exact(&mut buf).unwrap();
+                let value = u64::from_le_bytes(buf);
+
+                Message::Load(adr, value, size)
+            }
+            Header::STORE => {
+                let size = {
+                    let mut bytebuf = [0; 1];
+                    reader.read_exact(&mut bytebuf).unwrap();
+                    u8::from_le_bytes(bytebuf)
+                };
+
+                let mut buf = [0; 8];
+
+                reader.read_exact(&mut buf).unwrap();
+                let adr = u64::from_le_bytes(buf);
+
+                reader.read_exact(&mut buf).unwrap();
+                let value = u64::from_le_bytes(buf);
+
+                Message::Store(adr, value, size)
+            }
+            Header::REGISTERS => {
+                let count = {
+                    let mut bytebuf = [0; 1];
+                    reader.read_exact(&mut bytebuf).unwrap();
+                    u8::from_le_bytes(bytebuf) as usize
+                };
+
+                let mut regs = vec![0; count];
+
+                let mut buf = [0; 8];
+
+                reader.read_exact(&mut buf).unwrap();
+                let flags = u64::from_le_bytes(buf);
+
+                reader.read_exact(&mut buf).unwrap();
+                let pc = u64::from_le_bytes(buf);
+
+                for i in 0..count {
+                    reader.read_exact(&mut buf).unwrap();
+                    regs[i] = u64::from_le_bytes(buf);
+                }
+
+                Message::Registers(RegisterMessage {
+                    pc,
+                    flags,
+                    regs: regs.into_boxed_slice(),
+                })
+            }
+            Header::SYSCALL => {
+                let mut buf = [0; 8];
+
+                reader.read_exact(&mut buf).unwrap();
+                let len = u64::from_le_bytes(buf);
+
+                let string = {
+                    let mut strbuf = vec![0; len as usize];
+                    reader.read_exact(&mut strbuf).unwrap();
+                    String::from_utf8(strbuf).unwrap().into_boxed_str()
+                };
+
+                Message::Syscall(string)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Message {
+    LibLoad(Box<str>, u64, u64),
+    Separator,
+    Address(u64),
+    Code(Box<[u8]>),
+    Registers(RegisterMessage),
+    Flags(u64),
+    Load(u64, u64, u8),
+    Store(u64, u64, u8),
+    Syscall(Box<str>),
+}
+
+#[derive(Clone, Debug)]
+pub struct RegisterMessage {
+    pub pc: u64,
+    pub flags: u64,
+    pub regs: Box<[u64]>,
+}
+
+fn get_next_message<R: Read>(reader: &mut R) -> Option<Message> {
+    let mut header = [0; 1];
+
+    reader.read_exact(&mut header).ok()?;
+
+    // println!("Header: {:x}", header[0]);
+    let header: Header = header[0]
+        .try_into()
+        .unwrap_or_else(|_| {
+            let mut data = [0; 16];
+            reader.read_exact(&mut data).unwrap();
+            println!("following: {:02x?}", data);
+            panic!();
+        });
+        // .expect(&format!("Unknown header 0x{:x}", header[0]));
+
+    let msg = header.deserialize(reader);
+
+    Some(msg)
+}
+
 impl<STEP, const N: usize> Iterator for QEMUParser<STEP, N>
 where
     STEP: Step<N> + Send + 'static + fmt::Debug,
-    STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
+    STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
 {
     type Item = ParsedStep<STEP, N>;
 
@@ -75,53 +264,46 @@ where
             return None;
         }
 
-        let mut lines: Vec<String> = vec![];
+        let mut msgs = vec![];
 
-        loop {
-            let done = lines.last().map(|x| x.as_str()) == Some("----------------");
-
-            // if done, send the message
-            if done {
-                lines.pop(); // remove the -- sep
-
-                if lines[0].starts_with("elflibload") {
-                    let e = Self::parse_elflibload(&lines).unwrap();
-                    let e = ParsedStep::LibLoad(e);
-                    lines.clear();
-                    break Some(e);
-                } else {
-                    let s = STEP::try_from(&lines).unwrap();
-                    let s = ParsedStep::TraceStep(s);
-                    lines.clear();
-                    break Some(s);
-                }
+        while let Some(m) = get_next_message(&mut self.reader) {
+            if matches!(m, Message::Separator) {
+                break;
             }
 
-            // otherwise, read one more line
-            let mut stderr_buf = String::new();
-            let result = self.reader.read_line(&mut stderr_buf).unwrap();
-
-            // EOF
-            if result == 0 {
-                // this sets self.proc = None, so a None is returned next time
-                let mut my_proc = None;
-                mem::swap(&mut self.proc, &mut my_proc);
-                let my_proc = my_proc.unwrap();
-
-                // make sure it closed gracefully
-                let result = my_proc.wait_with_output().unwrap();
-
-                break Some(ParsedStep::Final(result));
-            }
-
-            lines.push(
-                stderr_buf
-                    .strip_suffix('\n')
-                    .map(|x| x.to_string())
-                    // last line may not have a newline
-                    .unwrap_or(stderr_buf),
-            );
+            msgs.push(m);
         }
+
+        // if there are no msgs, we're done!
+        if msgs.is_empty() {
+            let mut my_proc = None;
+            mem::swap(&mut self.proc, &mut my_proc);
+            let my_proc = my_proc.unwrap();
+
+            // make sure it closed gracefully
+            let result = my_proc.wait_with_output().unwrap();
+
+            return Some(ParsedStep::Final(result));
+        }
+
+        if matches!(msgs[0], Message::LibLoad(_, _, _)) {
+            let map = msgs
+                .into_iter()
+                .map(|m| match m {
+                    Message::LibLoad(name, from, to) => (name.to_string(), (from, to)),
+                    _ => panic!("Got libload and some other junk!"),
+                })
+                .collect();
+
+            return Some(ParsedStep::LibLoad(map));
+        }
+
+        // otherwise, it's just a step :)
+
+        // println!("batch: {:x?}", msgs);
+
+        let s = STEP::try_from(&msgs).unwrap();
+        Some(ParsedStep::TraceStep(s))
     }
 }
 
@@ -141,33 +323,5 @@ impl<STEP, const N: usize> QEMUParser<STEP, N> {
             reader,
             _phantom: PhantomData,
         }
-    }
-
-    fn parse_elflibload(output: &[String]) -> anyhow::Result<HashMap<String, (u64, u64)>> {
-        let parts: Vec<_> = output
-            .iter()
-            .map(|x| x.split_once('|'))
-            .collect::<Option<Vec<_>>>()
-            .context("invalid header, should only be | separated key|values")?;
-
-        let mut elfs = HashMap::new();
-        for (key, value) in parts {
-            match key {
-                "elflibload" => {
-                    let (path, other) = value.split_once('|').unwrap();
-                    let (from, to) = other.split_once('|').unwrap();
-
-                    let from = u64::from_str_radix(from, 16).unwrap();
-                    let to = u64::from_str_radix(to, 16).unwrap();
-
-                    elfs.insert(path.to_string(), (from, to));
-                }
-                _ => {
-                    return Err(anyhow::anyhow!("unknown header key: {}", key));
-                }
-            }
-        }
-
-        Ok(elfs)
     }
 }

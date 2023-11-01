@@ -1,9 +1,6 @@
 use core::fmt;
-use std::str::FromStr;
 
-use anyhow::Context;
 use bitflags::Flags;
-use hex::FromHex;
 use num_traits::Num;
 
 pub mod aarch64;
@@ -14,6 +11,7 @@ pub use x64::{X64Flags, X64State, X64Step};
 use crate::{
     arch::Arch,
     dis::{self},
+    tracer::qemu::{Message, RegisterMessage},
 };
 
 /// A single step in the trace.
@@ -100,57 +98,34 @@ struct GenericState<TYPE, const N: usize> {
     flags: TYPE,
 }
 
-impl<TYPE, const N: usize> FromStr for GenericState<TYPE, N>
+impl<TYPE, const N: usize> TryFrom<RegisterMessage> for GenericState<TYPE, N>
 where
     TYPE: Num + Copy,
+    TYPE: TryFrom<u64>,
+    TYPE: std::fmt::Debug,
     <TYPE as Num>::FromStrRadixErr: fmt::Debug,
+    <TYPE as TryFrom<u64>>::Error: fmt::Debug,
 {
-    type Err = anyhow::Error;
+    type Error = anyhow::Error;
 
-    fn from_str(input: &str) -> anyhow::Result<Self> {
-        let regs = input
-            .split('|')
-            .map(|data| data.split_once('='))
-            .map(Option::unwrap)
-            .map(|(name, value)| (name.trim(), TYPE::from_str_radix(value, 16).unwrap()));
+    fn try_from(input: RegisterMessage) -> anyhow::Result<Self> {
+        let RegisterMessage { pc, flags, regs } = input;
 
-        let mut registers: [Option<TYPE>; N] = [None; N];
-        let mut pc = None;
-        let mut flags = None;
+        let pc = pc.try_into().unwrap();
+        let flags = flags.try_into().unwrap();
 
-        for (name, value) in regs {
-            match name {
-                "pc" => {
-                    pc = Some(value);
-                }
-                "flags" => {
-                    flags = Some(value);
-                }
-                _ => {
-                    let index = name.strip_prefix('r').context("missing register prefix")?;
-                    let index = usize::from_str_radix(index, 10)?;
-                    registers[index] = Some(value);
-                }
-            }
-        }
+        let regs = regs
+            .into_iter()
+            .map(|&v| v.try_into().unwrap())
+            .collect::<Vec<_>>();
 
-        let pc = pc.unwrap();
-        let flags = flags.unwrap();
+        let regs = regs.try_into().unwrap();
 
-        if registers.contains(&None) {
-            return Err(anyhow::anyhow!("register not set"));
-        }
-        let registers = registers.map(Option::unwrap);
-
-        Ok(Self {
-            regs: registers,
-            pc,
-            flags,
-        })
+        Ok(Self { regs, pc, flags })
     }
 }
 
-pub struct GenericStep<STATE: FromStr> {
+pub struct GenericStep<STATE: TryFrom<RegisterMessage>> {
     state: STATE,
     code: Vec<u8>,
     address: u64,
@@ -158,112 +133,63 @@ pub struct GenericStep<STATE: FromStr> {
     memory_ops: Vec<MemoryOp>,
 }
 
-impl<STATE> TryFrom<&[String]> for GenericStep<STATE>
+impl<STATE> TryFrom<&[Message]> for GenericStep<STATE>
 where
-    STATE: FromStr<Err = anyhow::Error>,
+    STATE: TryFrom<RegisterMessage, Error = anyhow::Error>,
 {
     type Error = anyhow::Error;
 
-    fn try_from(input: &[String]) -> anyhow::Result<Self> {
+    fn try_from(value: &[Message]) -> Result<Self, Self::Error> {
         let mut s_state = None;
         let mut s_address = None;
         let mut s_code = None;
 
-        let mut partial_strace = None;
         let mut strace = None;
 
         let mut memory_ops = vec![];
 
-        for line in input {
-            let (what, content) = match line.split_once('|') {
-                Some(x) => x,
-                None => continue,
-            };
-
-            match what {
-                "regs" => {
-                    s_state = if let Some(prev) = s_state {
-                        Some(prev)
+        for m in value {
+            match m {
+                Message::Address(a) => s_address = Some(*a),
+                Message::Code(c) => s_code = Some(c.to_vec()),
+                Message::Registers(regs) => {
+                    s_state = if let Some(existing) = s_state {
+                        Some(existing)
                     } else {
-                        Some(STATE::from_str(content)?)
-                    };
-                }
-                "address" => {
-                    s_address = Some(
-                        u64::from_str_radix(content, 16).map_err(Into::<anyhow::Error>::into)?,
-                    );
-                }
-                "code" => {
-                    s_code = Some(Vec::from_hex(content).unwrap());
-                }
-                "strace" => {
-                    let content = {
-                        let (pid, data) = content.split_once('|').expect("missing pid");
-                        assert!(pid.starts_with("pid="));
-                        data
-                    };
-
-                    let content = content
-                        .strip_prefix("contents=")
-                        .expect("missing content= prefix");
-
-                    if let Some(data) = content.strip_suffix("|sdone") {
-                        strace = Some(data.to_string())
-                    } else {
-                        partial_strace = Some(content)
+                        Some(STATE::try_from(regs.clone()).unwrap())
                     }
                 }
-                "st" | "ld" => {
-                    let (bits, rest) = content.split_once('|').unwrap();
-
-                    let bits = i32::from_str_radix(bits, 10).unwrap();
-
-                    let (ptr, val) = rest.split_once('|').unwrap();
-                    let ptr = ptr.strip_prefix("0x").unwrap();
-                    let ptr = u64::from_str_radix(ptr, 16).unwrap();
-
-                    let value = match bits {
-                        8 => MemoryValue::Byte(u8::from_str_radix(val, 16)?),
-                        16 => MemoryValue::Word(u16::from_str_radix(val, 16)?),
-                        32 => MemoryValue::Dword(u32::from_str_radix(val, 16)?),
-                        64 => MemoryValue::Qword(u64::from_str_radix(val, 16)?),
-                        _ => return Err(anyhow::anyhow!("unknown value size: {} bits", bits)),
+                Message::Flags(_) => todo!(),
+                Message::Load(adr, value, size) | Message::Store(adr, value, size) => {
+                    let value = match size {
+                        1 => MemoryValue::Byte(*value as u8),
+                        2 => MemoryValue::Word(*value as u16),
+                        4 => MemoryValue::Dword(*value as u32),
+                        8 => MemoryValue::Qword(*value as u64),
+                        _ => return Err(anyhow::anyhow!("unknown value size: {} bytes", size)),
                     };
 
-                    let kind = match what {
-                        "st" => MemoryOpKind::Write,
-                        "ld" => MemoryOpKind::Read,
+                    let kind = match m {
+                        Message::Load(_, _, _) => MemoryOpKind::Read,
+                        Message::Store(_, _, _) => MemoryOpKind::Write,
                         _ => unreachable!(),
                     };
 
                     memory_ops.push(MemoryOp {
-                        address: ptr,
+                        address: *adr,
                         kind,
                         value,
                     });
                 }
-                _ => {
-                    // might be the end of an strace
-                    if let Some(data) = line.strip_suffix("|sdone") {
-                        strace = Some(
-                            partial_strace
-                                .expect("extending strace without a start")
-                                .to_string()
-                                + data,
-                        );
-                        partial_strace = None;
-                    } else {
-                        panic!("unknown data '{}'", line)
-                    }
-                }
+                Message::Syscall(s) => strace = Some(s.to_string()),
+
+                Message::LibLoad(_, _, _) | Message::Separator => panic!("really shouldnt happen"),
             }
         }
 
         let address = s_address.unwrap();
         let code = s_code.unwrap();
         let state = s_state.unwrap();
-
-        assert!(partial_strace.is_none());
 
         Ok(Self {
             state,
