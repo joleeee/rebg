@@ -165,7 +165,11 @@
     selectedIdx.subscribe((i) => (selected_idx = i));
     $: if (selected_idx != null && connected) {
         sendStore.set(JSON.stringify({ registers: selected_idx }));
+        sendStore.set(JSON.stringify({ memory: [selected_adr, 8] }));
     }
+
+    let selected_adr = null;
+    selectedAddress.subscribe((a) => (selected_adr = a));
 
     function step_selected(step) {
         selected_idx = step.detail.index;

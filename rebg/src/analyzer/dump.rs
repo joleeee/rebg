@@ -239,6 +239,7 @@ impl TraceDumper {
             instrumentations,
             bt_lens,
             table,
+            mem,
         }
     }
 }

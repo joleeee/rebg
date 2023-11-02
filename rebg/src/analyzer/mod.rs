@@ -2,7 +2,7 @@ pub mod dump;
 use crate::{
     dis::Instruction,
     state::{Instrumentation, Step},
-    syms::SymbolTable,
+    syms::SymbolTable, mem::HistMem,
 };
 use std::fmt;
 
@@ -16,4 +16,5 @@ where
     pub instrumentations: Vec<Instrumentation>,
     pub bt_lens: Vec<usize>,
     pub table: SymbolTable,
+    pub mem: HistMem,
 }
