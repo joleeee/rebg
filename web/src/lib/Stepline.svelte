@@ -162,6 +162,7 @@
     }
 
     let selected_idx = null;
+    selectedIdx.subscribe((i) => (selected_idx = i));
     $: if (selected_idx != null && connected) {
         sendStore.set(JSON.stringify({ registers: selected_idx }));
     }
