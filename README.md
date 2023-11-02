@@ -75,6 +75,24 @@ printf: 0x4004e0
 $ 
 ```
 
+## Debug info
+If something is not working properly, you can enable debug output by setting the
+verbosity to `trace`, `debug`, `info`, `warn`, or `error` like so:
+```sh
+$ RUST_LOG="rebg=info" rebg ./memory-arm64 docker
+2023-11-02T11:24:16.916549Z  INFO rebg::host::docker: Starting qemu
+2023-11-02T11:24:16.917392Z  INFO rebg::tracer::qemu: Waiting for connection...
+2023-11-02T11:24:17.071363Z  INFO rebg::tracer::qemu: Connected! TcpStream { addr: [::ffff:127.0.0.1]:1337, peer: [::ffff:127.0.0.1]:59211, fd: 5 }
+stat: 4919
+dyn: 52428
+arr[]: 0x411040
+main: 0x40069c
+sp: 0x5500800c50
+printf: 0x4004e0
+2023-11-02T11:24:18.498586Z  WARN rebg::analyzer::dump: Error decoding syscall: BadFormat
+2023-11-02T11:24:18.500490Z  INFO rebg::serve: Execution done, starting WS server.
+```
+
 # Performance on MacOS
 If you're using macos and tracing `linux/amd64`, you can cut runtime by about
 60% by using rosetta with docker. In Docker Desktop you can find it under
