@@ -1,7 +1,7 @@
-<script>
+<script lang="ts">
     import { rwCssEntry } from "./color";
 
-    export let value = 0;
+    export let value: BigInt = 0n;
     export let r = false;
     export let w = false;
 

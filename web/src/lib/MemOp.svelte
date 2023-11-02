@@ -1,9 +1,9 @@
-<script>
+<script lang="ts">
     import Value from "./Value.svelte";
 
     export let kind = "";
-    export let adr = 0;
-    export let value = 0;
+    export let adr: BigInt = 0n;
+    export let value: BigInt = 0n;
 
     $: r = kind == "r";
     $: w = kind == "w";

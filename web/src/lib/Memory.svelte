@@ -25,8 +25,8 @@
 <div>
     {#each data as row}
         <div>
-            <!-- Number is a really ugly hack to remove type errors -->
-            <Value value={Number(row[0])} />
+            <!-- this is a really ugly hack to remove type errors -->
+            <Value value={BigInt(row[0])} />
             {#each row.slice(1) as entry}
                 &nbsp;<span>{entry}</span>
             {/each}
