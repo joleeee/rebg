@@ -66,7 +66,7 @@ enum Header {
     Address = 0xaa,
     Code = 0xff,
     Load = 0x33,
-    STore = 0x44,
+    Store = 0x44,
     Registers = 0x77,
     Syscall = 0x99,
     SyscallResult = 0x9a,
@@ -82,7 +82,7 @@ impl TryFrom<u8> for Header {
             0xaa => Ok(Self::Address),
             0xff => Ok(Self::Code),
             0x33 => Ok(Self::Load),
-            0x44 => Ok(Self::STore),
+            0x44 => Ok(Self::Store),
             0x77 => Ok(Self::Registers),
             0x99 => Ok(Self::Syscall),
             0x9a => Ok(Self::SyscallResult),
@@ -136,7 +136,7 @@ impl Header {
 
                 Message::Load(adr, value, size)
             }
-            Header::STore => {
+            Header::Store => {
                 let size = {
                     let mut bytebuf = [0; 1];
                     reader.read_exact(&mut bytebuf).unwrap();
