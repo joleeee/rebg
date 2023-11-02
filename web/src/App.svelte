@@ -54,6 +54,7 @@
     color: white;
     background-color: maroon;
     flex: 1;
+    overflow: auto;
   }
 
   .strace {
