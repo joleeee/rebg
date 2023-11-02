@@ -37,8 +37,8 @@ where
 #[serde(rename_all = "snake_case")]
 enum RebgRequest {
     Registers(u64),
-    // (from, count)
-    Memory(u64, u8),
+    // (from, count, tick)
+    Memory(u64, u8, u32),
 }
 
 fn handle<STEP, const N: usize>(
@@ -167,11 +167,11 @@ fn handle<STEP, const N: usize>(
 
                 ws.send(tungstenite::Message::Text(serialized)).unwrap();
             }
-            RebgRequest::Memory(from, cnt) => {
+            RebgRequest::Memory(from, cnt, tick) => {
                 let mut output = Vec::new();
                 for offset in 0..cnt {
                     let adr = from + offset as u64 * 8;
-                    output.push((adr, format!("{:032x}", mem.load64(u32::MAX, adr).unwrap_or_default())));
+                    output.push((adr, format!("{:032x}", mem.load64(tick, adr).unwrap_or_default())));
                 }
                 let serialized = serde_json::to_string(&json!({"memory": output})).unwrap();
                 ws.send(tungstenite::Message::Text(serialized)).unwrap();
