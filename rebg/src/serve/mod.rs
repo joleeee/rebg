@@ -16,6 +16,7 @@ pub fn ws<STEP, const N: usize>(analysis: Analysis<STEP, N>, arch: Arch)
 where
     STEP: Step<N> + fmt::Debug + std::marker::Sync,
 {
+    info!("Execution done, starting WS server.");
     let server = TcpListener::bind("127.0.0.1:9001").unwrap();
 
     std::thread::scope(|s| {
