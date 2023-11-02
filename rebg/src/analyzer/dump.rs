@@ -135,6 +135,8 @@ impl TraceDumper {
             insns.push(insn);
             let prev_instrumentation = instrumentations.iter().rev().nth(1);
 
+            let next_tick = (tick + 1) as u32;
+
             // apply memory operations
             for op in cur_step
                 .memory_ops()
@@ -142,10 +144,10 @@ impl TraceDumper {
                 .filter(|m| matches!(m.kind, MemoryOpKind::Write))
             {
                 match op.value {
-                    MemoryValue::Byte(b) => mem.store8(tick as u32, op.address, b),
-                    MemoryValue::Word(w) => mem.store16(tick as u32, op.address, w),
-                    MemoryValue::Dword(d) => mem.store32(tick as u32, op.address, d),
-                    MemoryValue::Qword(q) => mem.store64(tick as u32, op.address, q),
+                    MemoryValue::Byte(b) => mem.store8(next_tick, op.address, b),
+                    MemoryValue::Word(w) => mem.store16(next_tick, op.address, w),
+                    MemoryValue::Dword(d) => mem.store32(next_tick, op.address, d),
+                    MemoryValue::Qword(q) => mem.store64(next_tick, op.address, q),
                 }
                 .unwrap();
             }
