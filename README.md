@@ -11,6 +11,70 @@ emulation through qemu. This also makes a lot of stuff work out of the libc,
 wrt. libc and other libraries. It does mean you have up to two layers of
 emulation.
 
+# Setup
+Most is not documented, if you find anything that's not obvious, please just
+send me an email or open an issue!
+
+## Build the docker container(s)
+We use an augmented qemu to trace binaries, so compile it:
+```sh
+cd tools
+./build_all.sh
+```
+
+You can also invoke the commands manually:
+```sh
+docker build --platform linux/arm64 . -t rebg:arm64
+docker build --platform linux/amd64 . -t rebg:amd64
+```
+
+## Installation
+```sh
+cargo install --path .
+```
+
+You can also just use `cargo r -r --` instead of `rebg` in the following
+commands, if you do not want to install rebg yet.
+
+# Start the web UI
+You probably wanna start the web UI and leave it running.
+```sh
+cd web
+npm i
+npm run dev
+```
+
+# Usage
+
+## Debug a binary inside docker
+The last argument specifies if you want to run qemu inside docker, or native,
+which you can do if you have installed our modded qemu globally.
+```sh
+$ rebg ./memory-arm64 docker
+stat: 4919
+dyn: 52428
+arr[]: 0x411040
+main: 0x40069c
+sp: 0x5500800c50
+printf: 0x4004e0
+<hangs>
+```
+
+You can now visit [the web ui](http://localhost:5173/), to debug the execution in the past.
+
+## Don't start web server
+If you don't want rebg to start its websocket server for the UI, you can make it just `q`uit when the execution is done.
+```sh
+$ rebg ./memory-arm64 -q docker
+stat: 4919
+dyn: 52428
+arr[]: 0x411040
+main: 0x40069c
+sp: 0x5500800c50
+printf: 0x4004e0
+$ 
+```
+
 # Performance on MacOS
 If you're using macos and tracing `linux/amd64`, you can cut runtime by about
 60% by using rosetta with docker. In Docker Desktop you can find it under
@@ -40,23 +104,6 @@ Recording all state allows to introduce some bindings which look like things you
 ## note to self
 this feels so fucking great to step this way, i think just showing this shows
 how great debugging using this could be
-
-# Setup
-Most is not documented, if you find anything that's not obvious, please just
-send me an email or open an issue!
-
-## Build the docker container(s)
-We use an augmented qemu to trace binaries, so compile it:
-```sh
-cd tools
-./build_all.sh
-```
-
-You can also invoke the commands manaully:
-```sh
-docker build --platform linux/arm64 . -t rebg:arm64
-docker build --platform linux/amd64 . -t rebg:amd64
-```
 
 # Developing QEMU in docker
 To spawn a container you can build and run qemu inside, you can use the following commands

@@ -4,7 +4,7 @@
     import { selectedAddress, selectedIdx, showSymbols } from "./stores";
 
     export let steps = [
-        [0, 0, "0x0000005500806280", "sub sp, sp, x0"],
+        [0, 0, "0x0000005500806280", "this is fake data"],
         [0, 1, "0x0000005500806284", "str xzr, [sp]"],
         [0, 2, "0x0000005500806288", "cmp x0, #0x400"],
         [0, 3, "0x000000550080628c", "b.hs #0x55008064c8"],
