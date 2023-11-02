@@ -165,7 +165,8 @@
     selectedIdx.subscribe((i) => (selected_idx = i));
     $: if (selected_idx != null && connected) {
         sendStore.set(JSON.stringify({ registers: selected_idx }));
-        sendStore.set(JSON.stringify({ memory: [selected_adr, 8] }));
+        let from = Math.max(0, selected_adr - 4*8);
+        sendStore.set(JSON.stringify({ memory: [from, 8, selected_idx] }));
     }
 
     let selected_adr = null;
