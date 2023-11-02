@@ -1,9 +1,8 @@
-use std::str::FromStr;
-
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
 use crate::{
     arch::Arch,
     dis::{self, groups::Group},
+    tracer::qemu::{Message, RegisterMessage},
 };
 use bitflags::bitflags;
 
@@ -105,11 +104,11 @@ impl State<32> for Aarch64State {
     }
 }
 
-impl FromStr for Aarch64State {
-    type Err = anyhow::Error;
+impl TryFrom<RegisterMessage> for Aarch64State {
+    type Error = anyhow::Error;
 
-    fn from_str(input: &str) -> anyhow::Result<Self> {
-        let generic: GenericState<u64, 32> = GenericState::from_str(input)?;
+    fn try_from(value: RegisterMessage) -> Result<Self, Self::Error> {
+        let generic: GenericState<u64, 32> = GenericState::try_from(value)?;
 
         Ok(Self {
             regs: generic.regs,
@@ -119,10 +118,10 @@ impl FromStr for Aarch64State {
     }
 }
 
-impl TryFrom<&[String]> for Aarch64Step {
+impl TryFrom<&[Message]> for Aarch64Step {
     type Error = anyhow::Error;
 
-    fn try_from(input: &[String]) -> anyhow::Result<Self> {
+    fn try_from(input: &[Message]) -> anyhow::Result<Self> {
         let generic: GenericStep<Aarch64State> = GenericStep::try_from(input)?;
 
         Ok(Self {
@@ -210,21 +209,24 @@ impl Instrument for Aarch64Instrument {
 #[cfg(test)]
 mod tests {
     use super::Aarch64State;
-    use crate::state::Aarch64Flags;
-    use std::str::FromStr;
+    use crate::{state::Aarch64Flags, tracer::qemu::RegisterMessage};
 
     #[test]
-    fn aarch64_state_from_string() {
-        let input = "r0=0|r1=0|r2=0|r3=0|r4=0|r5=0|r6=0|r7=0|r8=0|r9=0|r10=0|r11=0|r12=0|r13=0|r14=0|r15=0|r16=0|r17=0|r18=0|r19=0|r20=0|r21=0|r22=0|r23=0|r24=0|r25=0|r26=0|r27=0|r28=0|r29=0|r30=0|r31=0|pc=0|flags=0";
+    fn aarch64_state_deser() {
+        let input = RegisterMessage {
+            pc: 0,
+            flags: 0,
+            regs: [0x1234; 32].into(),
+        };
 
-        let result = Aarch64State::from_str(input);
+        let result = Aarch64State::try_from(input);
 
         assert!(result.is_ok());
 
         assert_eq!(
             result.unwrap(),
             Aarch64State {
-                regs: [0; 32],
+                regs: [0x1234; 32],
                 pc: 0,
                 flags: Aarch64Flags::empty(),
             }

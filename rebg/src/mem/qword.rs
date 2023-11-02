@@ -166,9 +166,7 @@ impl HistMem {
     }
 
     pub fn store64aligned(&mut self, tick: u32, address: u64, v: u64) -> Result<(), ()> {
-        if !self.cells.contains_key(&address) {
-            self.cells.insert(address, MCell::new());
-        }
+        self.cells.entry(address).or_insert_with(MCell::new);
 
         let cell = self.cells.get_mut(&address).expect("logic error");
 
@@ -404,7 +402,7 @@ mod tests {
             for ind in 0..8 {
                 val |= i << (ind * 4);
             }
-            v.store32(TICK + 7 + i, i.into(), val as u32).unwrap();
+            v.store32(TICK + 7 + i, i.into(), val).unwrap();
         }
 
         assert_eq!(v.load64aligned(TICK + 30, 0), Some(0x0011223344556677));
@@ -464,7 +462,7 @@ mod tests {
         assert_eq!(v.load64(TICK, 9), None);
 
         // u32
-        println!("");
+        println!();
         for a in 0..10 {
             println!("32 {:02x}: {:08x}", a, v.load32(TICK, a).unwrap());
         }
@@ -479,7 +477,7 @@ mod tests {
         assert_eq!(v.load32(TICK, 13), None);
 
         // u16
-        println!("");
+        println!();
         for a in 0..10 {
             println!("16 {:02x}: {:04x}", a, v.load16(TICK, a).unwrap());
         }

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::{
     arch::Arch,
     dis::{
@@ -7,6 +5,7 @@ use crate::{
         groups::Group,
         regs::{Reg, X64Reg},
     },
+    tracer::qemu::{Message, RegisterMessage},
 };
 
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
@@ -117,11 +116,11 @@ impl X64State {
     }
 }
 
-impl FromStr for X64State {
-    type Err = anyhow::Error;
+impl TryFrom<RegisterMessage> for X64State {
+    type Error = anyhow::Error;
 
-    fn from_str(input: &str) -> anyhow::Result<Self> {
-        let generic: GenericState<u64, 16> = GenericState::from_str(input)?;
+    fn try_from(value: RegisterMessage) -> anyhow::Result<Self> {
+        let generic: GenericState<u64, 16> = GenericState::try_from(value)?;
 
         Ok(Self {
             regs: generic.regs,
@@ -131,10 +130,10 @@ impl FromStr for X64State {
     }
 }
 
-impl TryFrom<&[String]> for X64Step {
+impl TryFrom<&[Message]> for X64Step {
     type Error = anyhow::Error;
 
-    fn try_from(input: &[String]) -> anyhow::Result<Self> {
+    fn try_from(input: &[Message]) -> anyhow::Result<Self> {
         let generic: GenericStep<X64State> = GenericStep::try_from(input)?;
 
         Ok(Self {
@@ -237,21 +236,24 @@ impl Instrument for X64Instrument {
 #[cfg(test)]
 mod tests {
     use super::X64State;
-    use crate::state::X64Flags;
-    use std::str::FromStr;
+    use crate::{state::X64Flags, tracer::qemu::RegisterMessage};
 
     #[test]
-    fn aarch64_state_from_string() {
-        let input = "r0=0|r1=0|r2=0|r3=0|r4=0|r5=0|r6=0|r7=0|r8=0|r9=0|r10=0|r11=0|r12=0|r13=0|r14=0|r15=0|pc=0|flags=0";
+    fn aarch64_state_deser() {
+        let input = RegisterMessage {
+            pc: 0,
+            flags: 0,
+            regs: [0x4321; 16].into(),
+        };
 
-        let result = X64State::from_str(input);
+        let result = X64State::try_from(input);
 
         assert!(result.is_ok());
 
         assert_eq!(
             result.unwrap(),
             X64State {
-                regs: [0; 16],
+                regs: [0x4321; 16],
                 pc: 0,
                 flags: X64Flags::empty(),
             }

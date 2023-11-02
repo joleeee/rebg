@@ -4,7 +4,7 @@ use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
 use rebg::serve;
 use rebg::state::{Aarch64Step, Step, X64Step};
-use rebg::tracer::qemu::QEMUParser;
+use rebg::tracer::qemu::{QEMUParser, Message};
 use rebg::tracer::TracerCmd;
 use rebg::{
     arch::Arch,
@@ -139,7 +139,7 @@ where
     LAUNCHER: Host<Error = anyhow::Error>,
     TRACER: Tracer<STEP, N, ITER = QEMUParser<STEP, N>>,
     STEP: Step<N> + Send + 'static + fmt::Debug,
-    STEP: for<'a> TryFrom<&'a [String], Error = anyhow::Error>,
+    STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
 {
     let cmd: TracerCmd<STEP, N> = tracer.command(program, arch, launcher.localhost());
 
