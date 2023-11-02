@@ -173,8 +173,6 @@ impl Header {
                     u8::from_le_bytes(bytebuf) as usize
                 };
 
-                let mut regs = vec![0; count];
-
                 let mut buf = [0; 8];
 
                 reader.read_exact(&mut buf).unwrap();
@@ -183,9 +181,11 @@ impl Header {
                 reader.read_exact(&mut buf).unwrap();
                 let pc = u64::from_le_bytes(buf);
 
-                for i in 0..count {
+                let mut regs = vec![0; count];
+
+                for reg in regs.iter_mut() {
                     reader.read_exact(&mut buf).unwrap();
-                    regs[i] = u64::from_le_bytes(buf);
+                    *reg = u64::from_le_bytes(buf);
                 }
 
                 Message::Registers(RegisterMessage {
