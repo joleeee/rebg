@@ -115,7 +115,7 @@ where
         let flags = flags.try_into().unwrap();
 
         let regs = regs
-            .into_iter()
+            .iter()
             .map(|&v| v.try_into().unwrap())
             .collect::<Vec<_>>();
 
@@ -166,7 +166,7 @@ where
                         1 => MemoryValue::Byte(*value as u8),
                         2 => MemoryValue::Word(*value as u16),
                         4 => MemoryValue::Dword(*value as u32),
-                        8 => MemoryValue::Qword(*value as u64),
+                        8 => MemoryValue::Qword(*value),
                         _ => return Err(anyhow::anyhow!("unknown value size: {} bytes", size)),
                     };
 

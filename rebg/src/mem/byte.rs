@@ -89,9 +89,7 @@ impl HistMem {
     }
 
     pub fn store8(&mut self, tick: u32, adr: u64, val: u8) -> Result<(), ()> {
-        if !self.cells.contains_key(&adr) {
-            self.cells.insert(adr, MCell::new());
-        }
+        self.cells.entry(adr).or_insert_with(MCell::new);
 
         let cell = self.cells.get_mut(&adr).expect("logic error");
 
@@ -199,7 +197,7 @@ mod tests {
             for ind in 0..8 {
                 val |= i << (ind * 4);
             }
-            v.store32(TICK + 7 + i, i.into(), val as u32).unwrap();
+            v.store32(TICK + 7 + i, i.into(), val).unwrap();
         }
 
         assert_eq!(v.load64(TICK + 30, 0), Some(0x0011223344556677));
@@ -259,7 +257,7 @@ mod tests {
         assert_eq!(v.load64(TICK, 9), None);
 
         // u32
-        println!("");
+        println!();
         for a in 0..10 {
             println!("32 {:02x}: {:08x}", a, v.load32(TICK, a).unwrap());
         }
@@ -274,7 +272,7 @@ mod tests {
         assert_eq!(v.load32(TICK, 13), None);
 
         // u16
-        println!("");
+        println!();
         for a in 0..10 {
             println!("16 {:02x}: {:04x}", a, v.load16(TICK, a).unwrap());
         }
