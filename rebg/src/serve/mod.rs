@@ -171,11 +171,16 @@ fn handle<STEP, const N: usize>(
                 let mut output = Vec::new();
                 for offset in 0..cnt {
                     let adr = from + offset as u64 * 8;
-                    output.push((adr, format!("{:032x}", mem.load64(tick, adr).unwrap_or_default())));
+                    let value = if let Some(value) = mem.load64(tick, adr) {
+                        format!("{:032x}", value)
+                    } else {
+                        String::from("?")
+                    };
+                    output.push((adr, value));
                 }
                 let serialized = serde_json::to_string(&json!({"memory": output})).unwrap();
                 ws.send(tungstenite::Message::Text(serialized)).unwrap();
-            },
+            }
         }
     }
 }
