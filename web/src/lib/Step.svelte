@@ -47,9 +47,9 @@
         font-family: monospace;
     }
     .idx {
-        color: blue;
+        color: var(--step-color);
     }
     .adr {
-        color: red;
+        color: var(--adr-color);
     }
 </style>
