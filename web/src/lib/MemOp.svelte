@@ -1,5 +1,5 @@
 <script>
-    import { rwCssEntry } from "./color";
+    import Value from "./Value.svelte";
 
     export let kind = "";
     export let adr = 0;
@@ -8,8 +8,6 @@
     $: r = kind == "r";
     $: w = kind == "w";
 
-    $: Address = "0x" + adr.toString(16);
-    $: Value = "0x" + value.toString(16);
     $: Arrow = arrow(kind);
 
     function arrow(k) {
@@ -24,9 +22,7 @@
 </script>
 
 <div>
-    <span style={rwCssEntry(r, w)}>{Address}</span>&nbsp;{Arrow}&nbsp;<span
-        >{Value}</span
-    >
+    <Value {r} {w} value={adr} />&nbsp;{Arrow}&nbsp;<Value {value} />
 </div>
 
 <style>
