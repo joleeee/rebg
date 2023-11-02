@@ -188,7 +188,7 @@ impl Host for Docker {
         Ok(output.expect("no files in tar"))
     }
 
-    fn launch(&self, program: String, mut args: Vec<String>) -> Result<Child, Self::Error> {
+    fn launch(&self, program: &str, mut args: Vec<String>) -> Result<Child, Self::Error> {
         // run qemu inside the container
         info!("Starting qemu");
 

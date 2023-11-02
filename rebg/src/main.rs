@@ -63,11 +63,7 @@ enum Launchers {
 impl Host for Launchers {
     type Error = anyhow::Error;
 
-    fn launch(
-        &self,
-        program: String,
-        args: Vec<String>,
-    ) -> Result<std::process::Child, Self::Error> {
+    fn launch(&self, program: &str, args: Vec<String>) -> Result<std::process::Child, Self::Error> {
         match self {
             Launchers::Docker(d) => d.launch(program, args),
             Launchers::Native(n) => n.launch(program, args),
@@ -148,7 +144,9 @@ where
 {
     let cmd: TracerCmd<STEP, N> = tracer.command(program, arch, launcher.localhost());
 
-    let child = launcher.launch(cmd.program, cmd.args).unwrap();
+    let child = launcher
+        .launch(&cmd.program, cmd.args)
+        .expect(&format!("Failed launching '{}'", cmd.program));
 
     tracer.parse(child)
 }

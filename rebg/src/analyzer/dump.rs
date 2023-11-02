@@ -19,7 +19,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use tracing::{debug, warn, trace as trace_log};
+use tracing::{debug, trace as trace_log, warn};
 
 /// Dumps the log
 pub struct TraceDumper {

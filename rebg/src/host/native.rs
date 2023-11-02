@@ -28,7 +28,7 @@ impl Host for Native {
         Ok(fs::read(path)?)
     }
 
-    fn launch(&self, program: String, args: Vec<String>) -> Result<Child, Self::Error> {
+    fn launch(&self, program: &str, args: Vec<String>) -> Result<Child, Self::Error> {
         info!("Starting native");
         debug!("{} {:?}", program, args);
 
