@@ -22,11 +22,16 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <div on:click={click}>
-    <span style={idxCss(highlightIdx)}>{Tick}</span>&nbsp;<span>{data}</span>
+    <span class="step" style={idxCss(highlightIdx)}>{Tick}</span>&nbsp;<span
+        >{data}</span
+    >
 </div>
 
 <style>
     div {
         font-family: monospace;
+    }
+    .step {
+        color: var(--step-color);
     }
 </style>
