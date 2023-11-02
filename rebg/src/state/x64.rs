@@ -233,27 +233,30 @@ impl Instrument for X64Instrument {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::X64State;
-//     use crate::state::X64Flags;
-//     use std::str::FromStr;
+#[cfg(test)]
+mod tests {
+    use super::X64State;
+    use crate::{state::X64Flags, tracer::qemu::RegisterMessage};
 
-//     #[test]
-//     fn aarch64_state_from_string() {
-//         let input = "r0=0|r1=0|r2=0|r3=0|r4=0|r5=0|r6=0|r7=0|r8=0|r9=0|r10=0|r11=0|r12=0|r13=0|r14=0|r15=0|pc=0|flags=0";
+    #[test]
+    fn aarch64_state_deser() {
+        let input = RegisterMessage {
+            pc: 0,
+            flags: 0,
+            regs: [0x4321; 16].into(),
+        };
 
-//         let result = X64State::from_str(input);
+        let result = X64State::try_from(input);
 
-//         assert!(result.is_ok());
+        assert!(result.is_ok());
 
-//         assert_eq!(
-//             result.unwrap(),
-//             X64State {
-//                 regs: [0; 16],
-//                 pc: 0,
-//                 flags: X64Flags::empty(),
-//             }
-//         );
-//     }
-// }
+        assert_eq!(
+            result.unwrap(),
+            X64State {
+                regs: [0x4321; 16],
+                pc: 0,
+                flags: X64Flags::empty(),
+            }
+        );
+    }
+}
