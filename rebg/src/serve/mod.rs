@@ -79,6 +79,21 @@ fn handle<STEP, const N: usize>(
         ws.send(tungstenite::Message::Text(json)).unwrap();
     }
 
+    let strace: Vec<_> = trace
+        .iter()
+        .enumerate()
+        .filter_map(|(i, step)| {
+            if let Some(strace) = step.strace() {
+                Some((i, strace))
+            } else {
+                None
+            }
+        })
+        .map(|(i, s)| json!([i, s]))
+        .collect();
+    let strace = serde_json::to_string(&json!({"strace": strace})).unwrap();
+    ws.send(tungstenite::Message::Text(strace)).unwrap();
+
     // then send register values on request
     loop {
         let msg = ws.read().unwrap();

@@ -1,9 +1,9 @@
 <script>
     import { createEventDispatcher } from "svelte";
     import { selectedAddress, selectedIdx, showSymbols } from "./stores.js";
+    import { adrCss, idxCss } from "./color.js";
     const dispatch = createEventDispatcher();
-    const addressSelected = "#ff000060";
-    const idxSelected = "#ff0000c0";
+
     /** @type { Element } */
     let thisStep;
 
@@ -37,16 +37,8 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div on:click={click} bind:this={thisStep}>
-    <span
-        class="idx"
-        style={highlightIdx ? `background-color: ${idxSelected};` : ""}
-        >{Indent}{Index}</span
-    >
-    <span
-        class="adr"
-        style={highlightAdr ? `background-color: ${addressSelected};` : ""}
-        >{Address}</span
-    >
+    <span class="idx" style={idxCss(highlightIdx)}>{Indent}{Index}</span>
+    <span class="adr" style={adrCss(highlightAdr)}>{Address}</span>
     <span>{asm}</span>
 </div>
 

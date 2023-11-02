@@ -2,6 +2,7 @@
   import MemOps from "./lib/MemOps.svelte";
   import Regs from "./lib/Regs.svelte";
   import Stepline from "./lib/Stepline.svelte";
+  import Straceline from "./lib/Straceline.svelte";
 </script>
 
 <div class="timeline"><div class="padder">some list here</div></div>
@@ -9,6 +10,7 @@
 <div class="right">
   <div class="regs"><div class="padder"><Regs /></div></div>
   <div class="memops"><div class="padder"><MemOps /></div></div>
+  <div class="strace"><div class="padder"><Straceline /></div></div>
 </div>
 
 <style>
@@ -50,6 +52,13 @@
   .memops {
     color: white;
     background-color: maroon;
+    flex: 1;
+  }
+
+  .strace {
+    color: white;
+    min-height: 4em;
+    background-color: gray;
     flex: 1;
   }
 </style>

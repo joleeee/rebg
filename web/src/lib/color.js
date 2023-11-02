@@ -23,3 +23,13 @@ export function rwCssEntry(read, write) {
 
     return `background: linear-gradient(90deg, ${left} 15%, ${right} 85%); color: ${modTextColor}`;
 }
+
+const idxSelected = "#ff0000c0";
+const addressSelected = "#ff000060";
+export function idxCss(selected) {
+    return selected ? `background-color: ${idxSelected};` : "";
+}
+
+export function adrCss(selected) {
+    return selected ? `background-color: ${addressSelected};` : ""
+}
