@@ -35,6 +35,7 @@
 
   .stepline {
     background-color: white;
+    min-width: 40vw;
   }
 
   .right {
