@@ -93,12 +93,15 @@ impl TryFrom<u8> for Header {
 
 impl Header {
     fn deserialize<R: Read>(&self, reader: &mut R) -> Message {
+        let mut buf_8 = [0; 8];
+        let mut next_u64 = |reader: &mut R| {
+            reader.read_exact(&mut buf_8).unwrap();
+            u64::from_le_bytes(buf_8)
+        };
+
         match self {
             Header::Libload => {
-                let mut buf = [0; 8];
-
-                reader.read_exact(&mut buf).unwrap();
-                let len = u64::from_le_bytes(buf);
+                let len = next_u64(reader);
 
                 let name = {
                     let mut strbuf = vec![0; len as usize];
@@ -106,24 +109,15 @@ impl Header {
                     String::from_utf8(strbuf).unwrap().into_boxed_str()
                 };
 
-                reader.read_exact(&mut buf).unwrap();
-                let from = u64::from_le_bytes(buf);
-
-                reader.read_exact(&mut buf).unwrap();
-                let to = u64::from_le_bytes(buf);
+                let from = next_u64(reader);
+                let to = next_u64(reader);
 
                 Message::LibLoad(name, from, to)
             }
             Header::Separator => Message::Separator,
-            Header::Address => {
-                let mut buf = [0; 8];
-                reader.read_exact(&mut buf).unwrap();
-                Message::Address(u64::from_le_bytes(buf))
-            }
+            Header::Address => Message::Address(next_u64(reader)),
             Header::Code => {
-                let mut buf = [0; 8];
-                reader.read_exact(&mut buf).unwrap();
-                let len = u64::from_le_bytes(buf);
+                let len = next_u64(reader);
 
                 let mut code = vec![0; len as usize];
                 reader.read_exact(&mut code).unwrap();
@@ -137,13 +131,8 @@ impl Header {
                     u8::from_le_bytes(bytebuf)
                 };
 
-                let mut buf = [0; 8];
-
-                reader.read_exact(&mut buf).unwrap();
-                let adr = u64::from_le_bytes(buf);
-
-                reader.read_exact(&mut buf).unwrap();
-                let value = u64::from_le_bytes(buf);
+                let adr = next_u64(reader);
+                let value = next_u64(reader);
 
                 Message::Load(adr, value, size)
             }
@@ -154,13 +143,8 @@ impl Header {
                     u8::from_le_bytes(bytebuf)
                 };
 
-                let mut buf = [0; 8];
-
-                reader.read_exact(&mut buf).unwrap();
-                let adr = u64::from_le_bytes(buf);
-
-                reader.read_exact(&mut buf).unwrap();
-                let value = u64::from_le_bytes(buf);
+                let adr = next_u64(reader);
+                let value = next_u64(reader);
 
                 Message::Store(adr, value, size)
             }
@@ -171,19 +155,13 @@ impl Header {
                     u8::from_le_bytes(bytebuf) as usize
                 };
 
-                let mut buf = [0; 8];
-
-                reader.read_exact(&mut buf).unwrap();
-                let flags = u64::from_le_bytes(buf);
-
-                reader.read_exact(&mut buf).unwrap();
-                let pc = u64::from_le_bytes(buf);
+                let flags = next_u64(reader);
+                let pc = next_u64(reader);
 
                 let mut regs = vec![0; count];
 
                 for reg in regs.iter_mut() {
-                    reader.read_exact(&mut buf).unwrap();
-                    *reg = u64::from_le_bytes(buf);
+                    *reg = next_u64(reader);
                 }
 
                 Message::Registers(RegisterMessage {
@@ -193,10 +171,7 @@ impl Header {
                 })
             }
             Header::Syscall => {
-                let mut buf = [0; 8];
-
-                reader.read_exact(&mut buf).unwrap();
-                let len = u64::from_le_bytes(buf);
+                let len = next_u64(reader);
 
                 let string = {
                     let mut strbuf = vec![0; len as usize];
@@ -207,10 +182,7 @@ impl Header {
                 Message::Syscall(string)
             }
             Header::SyscallResult => {
-                let mut buf = [0; 8];
-
-                reader.read_exact(&mut buf).unwrap();
-                let len = u64::from_le_bytes(buf);
+                let len = next_u64(reader);
 
                 let string = {
                     let mut strbuf = vec![0; len as usize];
