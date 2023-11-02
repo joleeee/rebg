@@ -4,7 +4,7 @@ use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
 use rebg::serve;
 use rebg::state::{Aarch64Step, Step, X64Step};
-use rebg::tracer::qemu::{QEMUParser, Message};
+use rebg::tracer::qemu::{Message, QEMUParser};
 use rebg::tracer::TracerCmd;
 use rebg::{
     arch::Arch,
@@ -26,6 +26,10 @@ struct Arguments {
     #[argh(switch, short = 'q', long = "quit")]
     /// quit instead of opening a ws server
     quit: bool,
+
+    #[argh(switch, short = 'p', long = "print")]
+    /// print trace
+    print: bool,
 
     #[argh(option, short = 'a')]
     /// override detected architecture (arm64, amd64, ...)
@@ -95,6 +99,7 @@ fn main() {
         quit,
         target_arch,
         launcher,
+        print,
     } = argh::from_env();
 
     let bin = {
@@ -108,20 +113,20 @@ fn main() {
 
     let launcher = launcher.start_tracer(program.clone(), target_arch);
 
+    let dumper = TraceDumper { print };
+
     match target_arch {
         Arch::ARM64 => {
             let parser =
                 launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, target_arch, &program);
-            let analysis =
-                TraceDumper::analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
+            let analysis = dumper.analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
             if !quit {
                 serve::ws(analysis, target_arch);
             }
         }
         Arch::X86_64 => {
             let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, target_arch, &program);
-            let analysis =
-                TraceDumper::analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
+            let analysis = dumper.analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
             if !quit {
                 serve::ws(analysis, target_arch);
             }

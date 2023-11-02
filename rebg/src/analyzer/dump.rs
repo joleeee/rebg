@@ -19,13 +19,16 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use tracing::{debug, warn};
+use tracing::{debug, warn, trace as trace_log};
 
 /// Dumps the log
-pub struct TraceDumper {}
+pub struct TraceDumper {
+    pub print: bool,
+}
 
 impl TraceDumper {
     pub fn analyze<STEP, LAUNCHER, TRACER, ITER, const N: usize>(
+        &self,
         // to read files
         launcher: &LAUNCHER,
         // inferred from TRACER
@@ -112,7 +115,7 @@ impl TraceDumper {
 
         let table = Rc::new(RefCell::new(table));
         // analyzer will insert new symbols into table
-        let mut analyzer = RealAnalyzer::new(dis, arch, table.clone());
+        let mut analyzer = RealAnalyzer::new(dis, arch, table.clone(), self.print);
 
         // we want changes to instantly show up in the UI, but we are also
         // dependent on the next step for some analysis, so we need to first
@@ -185,13 +188,13 @@ impl TraceDumper {
 
                         if let Some(idx) = idx {
                             let removed: Vec<_> = bt.drain(idx..).collect();
-                            println!(
+                            trace_log!(
                                 ">>> {:3} RETURN: removing {} elements",
                                 bt.len(),
                                 removed.len()
                             );
                         } else {
-                            println!(">>> WARNING RETURN: could not find in backtrace!");
+                            trace_log!(">>> WARNING RETURN: could not find in backtrace!");
                         }
                     }
                 },
@@ -401,19 +404,21 @@ where
     syms: Rc<RefCell<SymbolTable>>,
     arch: Arch,
     syscall_state: SyscallState,
+    print: bool,
 }
 
 impl<STEP, const N: usize> RealAnalyzer<STEP, N>
 where
     STEP: Step<N>,
 {
-    fn new(dis: Dis, arch: Arch, syms: Rc<RefCell<SymbolTable>>) -> Self {
+    fn new(dis: Dis, arch: Arch, syms: Rc<RefCell<SymbolTable>>, print: bool) -> Self {
         Self {
             hist: Vec::new(),
             dis,
             syms,
             arch,
             syscall_state: SyscallState::new(),
+            print,
         }
     }
 
@@ -425,9 +430,10 @@ where
         if let Some(previous) = self.hist.last() {
             let current = step.state();
 
-            let diff = rstate::diff(previous, current);
-            diff.print::<STEP::STATE>(self.arch);
-            println!();
+            if self.print {
+                let diff = rstate::diff(previous, current);
+                diff.print::<STEP::STATE>(self.arch);
+            }
         }
 
         let address = step.address();
@@ -448,13 +454,17 @@ where
 
         drop(syms);
 
-        println!("{}: {}", location, op);
+        if self.print {
+            println!("{}: {}", location, op);
+        }
         // TODO: for some reason the pc is not always the same as the address, especially after cbnz, bl, etc, but also str...
         // EDIT: it seems like it happens when branching to somewhere doing a syscall. it results in two regs| messages, and the last one is the one that "counts"..., i guess where it jump to after the syscall is done or something...?
         assert_eq!(address, step.state().pc());
 
         if let Some(strace) = step.strace() {
-            println!("syscall: {}", strace);
+            if self.print {
+                println!("syscall: {}", strace);
+            }
 
             let update = self.syscall_state.register(strace);
             match update {
@@ -465,8 +475,6 @@ where
                     size,
                 })) => {
                     let binary = Binary::from_path(launcher, Path::new(&path));
-
-                    debug!("MEMMMM");
 
                     if let Ok(binary) = binary {
                         let mut new_symbol_table = SymbolTable::from_elf(path, binary.elf());
@@ -509,19 +517,20 @@ where
         let instrum = step.instrument();
         let branch = instrum.recover_branch(&self.dis.cs, &insn);
 
-        // only print memory changes if we're in the user binary
-        for MemoryOp {
-            address,
-            kind,
-            value,
-        } in step.memory_ops()
-        {
-            let arrow = match kind {
-                MemoryOpKind::Read => "->",
-                MemoryOpKind::Write => "<-",
-            };
+        if self.print {
+            for MemoryOp {
+                address,
+                kind,
+                value,
+            } in step.memory_ops()
+            {
+                let arrow = match kind {
+                    MemoryOpKind::Read => "->",
+                    MemoryOpKind::Write => "<-",
+                };
 
-            println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
+                println!("0x{:016x} {} 0x{:x}", address, arrow, value.as_u64());
+            }
         }
 
         self.hist.push(step.state().clone());

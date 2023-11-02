@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use tracing::debug;
 
 use crate::{arch::Arch, host::Host};
 
@@ -104,7 +105,7 @@ impl<'a> Binary<'a> {
         ] {
             let debug_sym_path = format!("{platform}/{prefix}/{suffix}.debug",);
 
-            println!("Trying {}", debug_sym_path);
+            debug!("Trying {}", debug_sym_path);
 
             let bin = Self::from_path(launcher, &PathBuf::from(&debug_sym_path));
 
@@ -112,7 +113,7 @@ impl<'a> Binary<'a> {
                 let bin_arch = Arch::from_elf(bin.elf().header.e_machine).ok();
 
                 if bin_arch != Some(arch) {
-                    println!("wrong arch {:?}", bin_arch);
+                    debug!("wrong arch {:?}", bin_arch);
                     continue;
                 }
 

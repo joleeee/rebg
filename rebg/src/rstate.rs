@@ -77,6 +77,7 @@ impl<const N: usize> StateDiff<N> {
                 println!("flags +{}", name);
             }
         }
+        println!();
 
         !diff_regs.is_empty() || !flags.is_empty()
     }
