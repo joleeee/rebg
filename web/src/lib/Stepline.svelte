@@ -275,7 +275,7 @@
             }
             // hacky af
             selectedIdx.set(selected_idx);
-            selectedAddress.set(step[2]);
+            // selectedAddress.set(step[2]);
         }
     }
 </script>

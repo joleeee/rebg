@@ -20,6 +20,10 @@
         data = mem;
     }
 
+    function hexify(value) {
+        return "0x" + parseInt(value).toString(16);
+    }
+
     const height = 8;
     const width = 2;
 </script>
@@ -27,7 +31,7 @@
 <div>
     {#each data as row}
         <div>
-            <span>{row[0]}:</span>&nbsp;
+            <span>{hexify(row[0])}:</span>&nbsp;
             {#each row.slice(1) as entry}
                 &nbsp;<span>{entry}</span>
             {/each}
