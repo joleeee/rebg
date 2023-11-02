@@ -68,7 +68,6 @@ enum Header {
     Load = 0x33,
     STore = 0x44,
     Registers = 0x77,
-    // FLAGS = 0x78,
     Syscall = 0x99,
     SyscallResult = 0x9a,
 }
@@ -85,7 +84,6 @@ impl TryFrom<u8> for Header {
             0x33 => Ok(Self::Load),
             0x44 => Ok(Self::STore),
             0x77 => Ok(Self::Registers),
-            // 0x78 => Ok(Self::FLAGS),
             0x99 => Ok(Self::Syscall),
             0x9a => Ok(Self::SyscallResult),
             _ => Err(()),
@@ -252,14 +250,12 @@ fn get_next_message<R: Read>(reader: &mut R) -> Option<Message> {
 
     reader.read_exact(&mut header).ok()?;
 
-    // println!("Header: {:x}", header[0]);
     let header: Header = header[0].try_into().unwrap_or_else(|_| {
         let mut data = [0; 16];
         reader.read_exact(&mut data).unwrap();
         println!("following: {:02x?}", data);
         panic!();
     });
-    // .expect(&format!("Unknown header 0x{:x}", header[0]));
 
     let msg = header.deserialize(reader);
 
@@ -314,8 +310,6 @@ where
         }
 
         // otherwise, it's just a step :)
-
-        // println!("batch: {:x?}", msgs);
 
         let s = STEP::try_from(&msgs).unwrap();
         Some(ParsedStep::TraceStep(s))

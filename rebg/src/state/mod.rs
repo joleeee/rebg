@@ -117,9 +117,9 @@ where
         let regs = regs
             .iter()
             .map(|&v| v.try_into().unwrap())
-            .collect::<Vec<_>>();
-
-        let regs = regs.try_into().unwrap();
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
         Ok(Self { regs, pc, flags })
     }
