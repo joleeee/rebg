@@ -60,5 +60,6 @@
     min-height: 4em;
     background-color: gray;
     flex: 1;
+    overflow: scroll;
   }
 </style>
