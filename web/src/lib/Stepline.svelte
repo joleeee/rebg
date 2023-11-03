@@ -281,9 +281,9 @@
     }
 </script>
 
-<svelte:window on:keypress={key_press} />
-
-<div class="outer">
+<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="outer" on:keypress={key_press} tabindex="0">
     {#each steps as step}
         <Step
             on:selected={step_selected}

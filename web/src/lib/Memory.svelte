@@ -1,5 +1,6 @@
 <script>
     import Value from "./Value.svelte";
+    import { selectedAddress } from "./stores";
     import { memOpsStore, memoryStore } from "./ws";
 
     let data = [
@@ -33,9 +34,20 @@
         r_adrs = ops.r.map((a) => a[0]);
         w_adrs = ops.w.map((a) => a[0]);
     }
+
+    function key_press(event) {
+        if(event.key == "g") {
+            const a = prompt("Address?")
+            const v = BigInt(a); // handles optional 0x prefix too
+            selectedAddress.set(Number(v));
+        }
+    }
 </script>
 
-<div>
+<!-- <svelte:window on:keypress={key_press} /> -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+<div on:keypress={key_press} tabindex="0">
     {#each data as row}
         <div>
             <!-- this is a really ugly hack to remove type errors -->
