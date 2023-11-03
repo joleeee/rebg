@@ -36,8 +36,11 @@
     }
 
     function key_press(event) {
-        if(event.key == "g") {
-            const a = prompt("Address?")
+        if (event.key == "g") {
+            const a = prompt("Address?");
+            if (a === null) {
+                return;
+            }
             const v = BigInt(a); // handles optional 0x prefix too
             selectedAddress.set(Number(v));
         }
