@@ -9,7 +9,7 @@ use std::{
     path::Path,
     process::Child,
 };
-use tracing::info;
+use tracing::{info, debug};
 
 pub struct QEMU {}
 
@@ -70,6 +70,7 @@ enum Header {
     Registers = 0x77,
     Syscall = 0x99,
     SyscallResult = 0x9a,
+    Debug = 0xdd,
 }
 
 impl TryFrom<u8> for Header {
@@ -86,6 +87,7 @@ impl TryFrom<u8> for Header {
             0x77 => Ok(Self::Registers),
             0x99 => Ok(Self::Syscall),
             0x9a => Ok(Self::SyscallResult),
+            0xdd => Ok(Self::Debug),
             _ => Err(()),
         }
     }
@@ -192,6 +194,17 @@ impl Header {
 
                 Message::SyscallResult(string)
             }
+            Header::Debug => {
+                let len = next_u64(reader);
+
+                let string = {
+                    let mut strbuf = vec![0; len as usize];
+                    reader.read_exact(&mut strbuf).unwrap();
+                    String::from_utf8(strbuf).unwrap().into_boxed_str()
+                };
+
+                Message::Debug(string)
+            }
         }
     }
 }
@@ -208,6 +221,7 @@ pub enum Message {
     Store(u64, u64, u8),
     Syscall(Box<str>),
     SyscallResult(Box<str>),
+    Debug(Box<str>),
 }
 
 #[derive(Clone, Debug)]
@@ -254,6 +268,11 @@ where
                 break;
             }
 
+            match &m {
+                Message::Debug(d) => debug!("qemu debug: {}", d),
+                _ => {}
+            }
+
             msgs.push(m);
         }
 
@@ -272,8 +291,9 @@ where
         if matches!(msgs[0], Message::LibLoad(_, _, _)) {
             let map = msgs
                 .into_iter()
-                .map(|m| match m {
-                    Message::LibLoad(name, from, to) => (name.to_string(), (from, to)),
+                .flat_map(|m| match m {
+                    Message::LibLoad(name, from, to) => Some((name.to_string(), (from, to))),
+                    Message::Debug(_) => None,
                     _ => panic!("Got libload and some other junk!"),
                 })
                 .collect();

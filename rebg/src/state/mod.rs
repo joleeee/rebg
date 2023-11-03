@@ -186,6 +186,7 @@ where
                 Message::SyscallResult(s) => strace_result = Some(s.to_string()),
 
                 Message::LibLoad(_, _, _) | Message::Separator => panic!("really shouldnt happen"),
+                Message::Debug(_) => {}
             }
         }
 
