@@ -146,4 +146,8 @@ impl<'a> Binary<'a> {
     pub fn elf(&self) -> &goblin::elf::Elf {
         &self.elf
     }
+
+    pub fn bin(&self) -> &[u8] {
+        &self.raw.as_slice()
+    }
 }
