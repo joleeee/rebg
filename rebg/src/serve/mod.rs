@@ -169,14 +169,22 @@ fn handle<STEP, const N: usize>(
             }
             RebgRequest::Memory(from, cnt, tick) => {
                 let mut output = Vec::new();
+
                 for offset in 0..cnt {
-                    let adr = from + offset as u64 * 8;
-                    let value = if let Some(value) = mem.load64(tick, adr) {
-                        format!("{:032x}", value)
+                    let base = from + offset as u64 * 8;
+
+                    let chunk: Vec<_> = (base..base+8).map(|adr| if let Some(value) = mem.load8(tick, adr) {
+                        format!("{:02x}", value)
                     } else {
-                        String::from("?")
-                    };
-                    output.push((adr, value));
+                        String::from("??")
+                    }).collect();
+                    // let value = if let Some(value) = mem.load64(tick, adr) {
+                    //     format!("{:032x}", value)
+                    // } else {
+                    //     String::from("?")
+                    // };
+                    // output.push((adr, value));
+                    output.push((base, chunk))
                 }
                 let serialized = serde_json::to_string(&json!({"memory": output})).unwrap();
                 ws.send(tungstenite::Message::Text(serialized)).unwrap();

@@ -9,7 +9,7 @@ use std::{
     path::Path,
     process::Child,
 };
-use tracing::{info, debug};
+use tracing::{debug, info, trace};
 
 pub struct QEMU {}
 
@@ -294,7 +294,11 @@ where
                 .flat_map(|m| match m {
                     Message::LibLoad(name, from, to) => Some((name.to_string(), (from, to))),
                     Message::Debug(_) => None,
-                    _ => panic!("Got libload and some other junk!"),
+                    Message::Store(_, _, _) | Message::Load(_, _, _) => {
+                        trace!("TODO: handle {:x?}", m);
+                        None
+                    }
+                    _ => panic!("Got libload and some other junk!: {:?}", m),
                 })
                 .collect();
 
