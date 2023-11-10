@@ -61,10 +61,9 @@ impl TraceDumper {
 
         // get symbol table from all binaries
         let mut symbol_tables = Vec::new();
-        for path in offsets.keys() {
-            let binary = Binary::from_path(launcher, &PathBuf::from(path)).unwrap();
+        for (path, pie) in offsets {
+            let binary = Binary::from_path(launcher, &PathBuf::from(path.clone())).unwrap();
 
-            let pie = offsets.get(path).unwrap();
             let mut table = SymbolTable::from_elf(path.clone(), binary.elf());
 
             if binary.elf().syms.is_empty() {
@@ -98,7 +97,7 @@ impl TraceDumper {
             };
 
             match v {
-                ParsedStep::LibLoad(_) => panic!("Unexpected libload"),
+                ParsedStep::LibLoad(_) /*| ParsedStep::LibLoadBin(_)*/ => panic!("Unexpected libload"),
                 ParsedStep::TraceStep(step) => {
                     trace.push(step);
                 }

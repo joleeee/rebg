@@ -49,6 +49,13 @@ impl Arch {
         }
     }
 
+    pub fn qiling_rootfs(&self) -> &str {
+        match self {
+            Arch::ARM64 => "rootfs/arm64_linux",
+            Arch::X86_64 => "rootfs/x8664_linux",
+        }
+    }
+
     pub fn docker_platform(&self) -> &str {
         match self {
             Arch::ARM64 => "linux/arm64",

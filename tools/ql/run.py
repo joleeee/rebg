@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+
+from qiling import Qiling
+from qiling.const import QL_ARCH
+from qiling.os.mapper import QlFsMappedObject
+from typing import List
+from pprint import pprint
+
+# from capstone import *
+from unicorn import x86_const, arm64_const
+
+# md = Cs(CS_ARCH_X86, CS_MODE_64)
+X86_REGS = [
+    "rax",
+    "rcx",
+    "rdx",
+    "rbx",
+    "rsp",
+    "rbp",
+    "rsi",
+    "rdi",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15",
+]
+
+ARM64_REGS = [
+    "x0",
+    "x1",
+    "x2",
+    "x3",
+    "x4",
+    "x5",
+    "x6",
+    "x7",
+    "x8",
+    "x9",
+    "x10",
+    "x11",
+    "x12",
+    "x13",
+    "x14",
+    "x15",
+    "x16",
+    "x17",
+    "x18",
+    "x19",
+    "x20",
+    "x21",
+    "x22",
+    "x23",
+    "x24",
+    "x25",
+    "x26",
+    "x27",
+    "x28",
+    "x29",  # fp
+    "lr",
+    "sp",
+]
+
+from enum import Enum
+
+
+class Arch(Enum):
+    ARM64 = QL_ARCH.ARM64
+    X8664 = QL_ARCH.X8664
+
+    def flags_reg(self):
+        if self == self.ARM64:
+            return arm64_const.UC_ARM64_REG_NZCV
+        elif self == self.X86_REGS:
+            x86_const.UC_X86_REG_FLAGS
+        else:
+            raise Exception("what u doin")
+
+    def regs(self):
+        if self == self.ARM64:
+            return ARM64_REGS
+        elif self == self.X86_REGS:
+            return X86_REGS
+        else:
+            raise Exception("what u doin")
+
+
+class Serializer:
+    def __init__(self):
+        import socket
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(("localhost", 1337))
+
+        self.sock = sock
+
+    def separator(self):
+        self.sock.sendall(b"\x55")
+
+    def address(self, value: int):
+        self.sock.sendall(b"\xaa")
+        self.sock.sendall(value.to_bytes(8, "little"))
+
+    def code(self, bin: bytes):
+        self.sock.sendall(b"\xff")
+        self.sock.sendall(len(bin).to_bytes(8, "little"))
+        self.sock.sendall(bin)
+
+    def registers(self, flags, pc, regs: List[int]):
+        self.sock.sendall(b"\x77")
+        self.sock.sendall(len(regs).to_bytes(1, "little"))
+        self.sock.sendall(flags.to_bytes(8, "little"))
+        self.sock.sendall(pc.to_bytes(8, "little"))
+        for r in regs:
+            self.sock.sendall(r.to_bytes(8, "little"))
+   
+    def libload(self, name: bytes, fr: int, to: int):
+        self.sock.sendall(b"\xee")
+        self.sock.sendall(len(name).to_bytes(8, "little"))
+        self.sock.sendall(name)
+        self.sock.sendall(fr.to_bytes(8, "little"))
+        self.sock.sendall(to.to_bytes(8, "little"))
+    
+    def libload_bin(self, name: bytes, content: bytes, fr: int, to: int):
+        self.sock.sendall(b"\xef")
+        self.sock.sendall(len(name).to_bytes(8, "little"))
+        self.sock.sendall(name)
+        self.sock.sendall(len(content).to_bytes(8, "little"))
+        print(f"len >> {len(content)} <<")
+        self.sock.sendall(content)
+        self.sock.sendall(fr.to_bytes(8, "little"))
+        self.sock.sendall(to.to_bytes(8, "little"))
+        
+
+
+ser = Serializer()
+
+
+def code(ql: Qiling, address, size):
+    ser.separator()
+
+    ser.address(address)
+
+    buf = ql.uc.mem_read(address, size)
+    ser.code(buf)
+
+    regs = []
+    for r in arch.regs():
+        regs.append(ql.arch.regs.read(r))
+
+    pc = ql.arch.regs.arch_pc
+
+    flags = ql.arch.regs.read(arch.flags_reg())
+
+    ser.registers(flags, pc, regs)
+
+
+def mem_read(ql, access, adr, size, value):
+    assert size in [0x1, 0x2, 0x4, 0x8]
+    # print(f"read at {adr:#x} {size=:#x}")
+    pass
+
+
+def mem_write(ql, access, adr, size, value):
+    assert size in [0x1, 0x2, 0x4, 0x8]
+    # print(f"WRITE at {adr:#x} {size=:#x}, {value=:#x}")
+    pass
+
+
+def inter(ql, a):
+    # print("INT", a)
+    pass
+
+
+arch = None
+
+
+def run(rootfs, argv):
+    ql = Qiling(argv, rootfs)
+
+    global arch
+    arch = Arch(ql.arch.type)
+
+    for start, end, perm, label, img in ql.mem.get_mapinfo():
+        if len(img) == 0:
+            continue
+        file = img.encode()
+        ser.libload(file, start, end)
+
+    ql.hook_code(code)
+    ql.hook_mem_read(mem_read)
+    ql.hook_mem_write(mem_write)
+    ql.hook_intr(inter)
+    ql.run()
+
+
+if __name__ == "__main__":
+    from sys import argv
+
+    if len(argv) < 3:
+        print("not enough args")
+        exit(0)
+
+    rootfs = argv[1]
+    rest = argv[2:]
+
+    run(rootfs, rest)

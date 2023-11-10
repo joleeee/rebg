@@ -5,31 +5,26 @@ use super::{
 use crate::{arch::Arch, state::Step};
 use std::{fmt, marker::PhantomData, path::Path};
 
-pub struct QEMU {}
+pub struct Qiling {}
 
-impl<STEP, const N: usize> Tracer<STEP, N> for QEMU
+impl<STEP, const N: usize> Tracer<STEP, N> for Qiling
 where
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
 {
     type ITER = GenericParser<STEP, N>;
 
-    fn command(&self, executable: &Path, arch: Arch, localhost: &str) -> TracerCmd<STEP, N> {
-        let qemu = arch.qemu_user_bin().to_string();
+    fn command(&self, executable: &Path, arch: Arch, _localhost: &str) -> TracerCmd<STEP, N> {
+        let python = "python3".to_string();
 
         let options = vec![
-            String::from("-rebglog"),
-            String::from("/dev/null"),
-            String::from("-rebgtcp"),
-            format!("{localhost}:1337"),
-            String::from("-one-insn-per-tb"),
-            String::from("-d"),
-            String::from("in_asm,strace"),
+            String::from("../tools/ql/run.py"),
+            format!("../tools/ql/{}", arch.qiling_rootfs()),
             executable.to_str().unwrap().to_string(),
         ];
 
         TracerCmd {
-            program: qemu,
+            program: python,
             args: options,
             _step: PhantomData,
         }

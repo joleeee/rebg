@@ -1,4 +1,16 @@
-use std::io::Read;
+use std::{
+    fmt,
+    io::{BufReader, Read},
+    marker::PhantomData,
+    net::{TcpListener, TcpStream},
+    process::Child,
+};
+
+use tracing::{info, trace};
+
+use crate::state::Step;
+
+use super::ParsedStep;
 
 #[derive(Debug)]
 enum Header {
@@ -172,5 +184,112 @@ pub fn get_next_message<R: Read>(reader: &mut R) -> Option<Message> {
 
     let msg = header.deserialize(reader);
 
+    trace!("{:x?}", msg);
+
     Some(msg)
+}
+
+pub fn get_next_step<R: Read, STEP, const N: usize>(
+    reader: &mut R,
+    proc: &mut Option<Child>,
+) -> Option<ParsedStep<STEP, N>>
+where
+    STEP: Step<N> + Send + 'static + fmt::Debug,
+    STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
+{
+    #[allow(clippy::question_mark)]
+    if proc.is_none() {
+        return None;
+    }
+
+    let mut msgs = vec![];
+
+    while let Some(m) = get_next_message(reader) {
+        if matches!(m, Message::Separator) {
+            break;
+        }
+
+        msgs.push(m);
+    }
+
+    // if there are no msgs, we're done!
+    if msgs.is_empty() {
+        let mut my_proc = None;
+        std::mem::swap(proc, &mut my_proc);
+        let my_proc = my_proc.unwrap();
+
+        // make sure it closed gracefully
+        let result = my_proc.wait_with_output().unwrap();
+
+        return Some(ParsedStep::Final(result));
+    }
+
+    if matches!(msgs[0], Message::LibLoad(_, _, _)) {
+        let map = msgs
+            .into_iter()
+            .map(|m| match m {
+                Message::LibLoad(name, from, to) => (name.to_string(), (from, to)),
+                _ => panic!("Got libload and some other junk!"),
+            })
+            .collect();
+
+        return Some(ParsedStep::LibLoad(map));
+    }
+
+    // if matches!(msgs[0], Message::LibLoadBin(_, _, _, _)) {
+    //     let map = msgs
+    //         .into_iter()
+    //         .map(|m| match m {
+    //             Message::LibLoadBin(name, cont, from, to) => (name.to_string(), (cont, from, to)),
+    //             _ => panic!("Got libload and some other junk!"),
+    //         })
+    //         .collect();
+
+    //     return Some(ParsedStep::LibLoadBin(map));
+    // }
+
+    // otherwise, it's just a step :)
+
+    let s = STEP::try_from(&msgs).unwrap();
+    Some(ParsedStep::TraceStep(s))
+}
+
+#[derive(Debug)]
+pub struct GenericParser<STEP, const N: usize> {
+    /// None when done
+    proc: Option<Child>,
+
+    reader: BufReader<TcpStream>,
+    _phantom: PhantomData<STEP>,
+}
+
+impl<STEP, const N: usize> Iterator for GenericParser<STEP, N>
+where
+    STEP: Step<N> + Send + 'static + fmt::Debug,
+    STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
+{
+    type Item = ParsedStep<STEP, N>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        get_next_step(&mut self.reader, &mut self.proc)
+    }
+}
+
+impl<STEP, const N: usize> GenericParser<STEP, N> {
+    pub fn new(proc: Child) -> Self {
+        let listener = TcpListener::bind("[::]:1337").unwrap();
+
+        info!("Waiting for connection...");
+        let con = listener.incoming().next().unwrap().unwrap();
+        info!("Connected! {:?}", con);
+        drop(listener); // close the socket, keep the connection, me THINKS
+
+        let reader = BufReader::new(con);
+
+        Self {
+            proc: Some(proc),
+            reader,
+            _phantom: PhantomData,
+        }
+    }
 }

@@ -4,9 +4,9 @@ use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
 use rebg::serve;
 use rebg::state::{Aarch64Step, Step, X64Step};
-use rebg::tracer::parser::Message;
-use rebg::tracer::qemu::QEMUParser;
+use rebg::tracer::parser::{GenericParser, Message};
 use rebg::tracer::TracerCmd;
+use rebg::tracer::qiling::Qiling;
 use rebg::{
     arch::Arch,
     host::Host,
@@ -15,7 +15,15 @@ use rebg::{
 use std::fmt;
 use std::path::Path;
 use std::{fs, path::PathBuf};
+use strum::EnumString;
 use tracing_subscriber::{fmt as tracing_fmt, EnvFilter};
+
+#[derive(EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum TraceTypes {
+    Qemu,
+    Qiling,
+}
 
 #[derive(argh::FromArgs)]
 /// tracer
@@ -35,6 +43,10 @@ struct Arguments {
     #[argh(option, short = 'a')]
     /// override detected architecture (arm64, amd64, ...)
     target_arch: Option<Arch>,
+
+    #[argh(option, short = 't', long = "tracer")]
+    /// the tracer to use
+    tracer: TraceTypes,
 
     #[argh(subcommand)]
     launcher: LauncherArgs,
@@ -96,6 +108,7 @@ fn main() {
         quit,
         target_arch,
         launcher,
+        tracer,
         print,
     } = argh::from_env();
 
@@ -106,34 +119,58 @@ fn main() {
     let target_arch =
         target_arch.unwrap_or_else(|| Arch::from_elf(bin.elf().header.e_machine).unwrap());
 
-    let qemu = QEMU {};
-
     let launcher = launcher.start_tracer(program.clone(), target_arch);
 
     let dumper = TraceDumper { print };
 
     match target_arch {
-        Arch::ARM64 => {
-            analyze_arch::<Aarch64Step, 32>(&dumper, quit, &launcher, qemu, target_arch, &program);
-        }
-        Arch::X86_64 => {
-            analyze_arch::<X64Step, 16>(&dumper, quit, &launcher, qemu, target_arch, &program);
-        }
+        Arch::ARM64 => match tracer {
+            TraceTypes::Qemu => {
+                let qemu = QEMU {};
+                analyze_arch::<Aarch64Step, QEMU, 32>(
+                    &dumper,
+                    quit,
+                    &launcher,
+                    qemu,
+                    target_arch,
+                    &program,
+                );
+            }
+            TraceTypes::Qiling => {
+                let qiling = Qiling{};
+                analyze_arch::<Aarch64Step, Qiling, 32>(
+                    &dumper,
+                    quit,
+                    &launcher,
+                    qiling,
+                    target_arch,
+                    &program,
+                );
+            },
+        },
+        Arch::X86_64 => match tracer {
+            TraceTypes::Qemu => {
+                let qemu = QEMU {};
+                analyze_arch::<X64Step, QEMU, 16>(&dumper, quit, &launcher, qemu, target_arch, &program);
+            }
+            TraceTypes::Qiling => todo!(),
+        },
     }
 }
 
-fn analyze_arch<STEP, const N: usize>(
+fn analyze_arch<STEP, TRACER, const N: usize>(
     dumper: &TraceDumper,
     quit: bool,
     launcher: &Launchers,
-    qemu: QEMU,
+    tracer: TRACER,
     target_arch: Arch,
     program: &Path,
 ) where
     STEP: Step<N> + Send + 'static + fmt::Debug + std::marker::Send + std::marker::Sync,
     STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
+    TRACER: Tracer<STEP, N, ITER = GenericParser<STEP, N>>,
 {
-    let parser = launch_qemu::<_, _, STEP, N>(launcher, qemu, target_arch, &program);
+    let parser = launch_qemu::<_, _, STEP, N>(launcher, tracer, target_arch, &program);
     let analysis = dumper.analyze::<_, _, QEMU, _, N>(launcher, parser, target_arch);
     if !quit {
         serve::ws(analysis, target_arch);
@@ -145,10 +182,10 @@ fn launch_qemu<LAUNCHER, TRACER, STEP, const N: usize>(
     tracer: TRACER,
     arch: Arch,
     program: &Path,
-) -> QEMUParser<STEP, N>
+) -> GenericParser<STEP, N>
 where
     LAUNCHER: Host<Error = anyhow::Error>,
-    TRACER: Tracer<STEP, N, ITER = QEMUParser<STEP, N>>,
+    TRACER: Tracer<STEP, N, ITER = GenericParser<STEP, N>>,
     STEP: Step<N> + Send + 'static + fmt::Debug,
     STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
 {

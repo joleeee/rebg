@@ -2,3 +2,6 @@
 	path = tools/qemu
 	url = git@github.com:joleeee/qemu.git
 	branch = rebg
+[submodule "tools/ql/rootfs"]
+	path = tools/ql/rootfs
+	url = https://github.com/qilingframework/rootfs
