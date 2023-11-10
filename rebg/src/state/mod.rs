@@ -10,8 +10,7 @@ pub use x64::{X64Flags, X64State, X64Step};
 
 use crate::{
     arch::Arch,
-    dis::{self},
-    tracer::qemu::{Message, RegisterMessage},
+    dis::{self}, tracer::parser::{Message, RegisterMessage},
 };
 
 /// A single step in the trace.

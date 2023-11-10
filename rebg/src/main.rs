@@ -4,7 +4,8 @@ use rebg::host::docker::{Docker, DockerArgs};
 use rebg::host::native::{Native, NativeArgs};
 use rebg::serve;
 use rebg::state::{Aarch64Step, Step, X64Step};
-use rebg::tracer::qemu::{Message, QEMUParser};
+use rebg::tracer::parser::Message;
+use rebg::tracer::qemu::QEMUParser;
 use rebg::tracer::TracerCmd;
 use rebg::{
     arch::Arch,

@@ -2,7 +2,7 @@ use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, S
 use crate::{
     arch::Arch,
     dis::{self, groups::Group},
-    tracer::qemu::{Message, RegisterMessage},
+    tracer::parser::{Message, RegisterMessage},
 };
 use bitflags::bitflags;
 
@@ -209,7 +209,7 @@ impl Instrument for Aarch64Instrument {
 #[cfg(test)]
 mod tests {
     use super::Aarch64State;
-    use crate::{state::Aarch64Flags, tracer::qemu::RegisterMessage};
+    use crate::{state::Aarch64Flags, tracer::parser::RegisterMessage};
 
     #[test]
     fn aarch64_state_deser() {
