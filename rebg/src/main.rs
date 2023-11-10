@@ -114,20 +114,29 @@ fn main() {
 
     match target_arch {
         Arch::ARM64 => {
-            let parser =
-                launch_qemu::<_, _, Aarch64Step, 32>(&launcher, qemu, target_arch, &program);
-            let analysis = dumper.analyze::<_, _, QEMU, _, 32>(&launcher, parser, target_arch);
-            if !quit {
-                serve::ws(analysis, target_arch);
-            }
+            analyze_arch::<Aarch64Step, 32>(&dumper, quit, &launcher, qemu, target_arch, &program);
         }
         Arch::X86_64 => {
-            let parser = launch_qemu::<_, _, X64Step, 16>(&launcher, qemu, target_arch, &program);
-            let analysis = dumper.analyze::<_, _, QEMU, _, 16>(&launcher, parser, target_arch);
-            if !quit {
-                serve::ws(analysis, target_arch);
-            }
+            analyze_arch::<X64Step, 16>(&dumper, quit, &launcher, qemu, target_arch, &program);
         }
+    }
+}
+
+fn analyze_arch<STEP, const N: usize>(
+    dumper: &TraceDumper,
+    quit: bool,
+    launcher: &Launchers,
+    qemu: QEMU,
+    target_arch: Arch,
+    program: &Path,
+) where
+    STEP: Step<N> + Send + 'static + fmt::Debug + std::marker::Send + std::marker::Sync,
+    STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
+{
+    let parser = launch_qemu::<_, _, STEP, N>(launcher, qemu, target_arch, &program);
+    let analysis = dumper.analyze::<_, _, QEMU, _, N>(launcher, parser, target_arch);
+    if !quit {
+        serve::ws(analysis, target_arch);
     }
 }
 
