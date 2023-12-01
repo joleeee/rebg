@@ -75,7 +75,7 @@ class Arch(Enum):
         if self == self.ARM64:
             return arm64_const.UC_ARM64_REG_NZCV
         elif self == self.X86_REGS:
-            x86_const.UC_X86_REG_FLAGS
+            return x86_const.UC_X86_REG_FLAGS
         else:
             raise Exception("what u doin")
 
@@ -133,6 +133,19 @@ class Serializer:
         self.sock.sendall(content)
         self.sock.sendall(fr.to_bytes(8, "little"))
         self.sock.sendall(to.to_bytes(8, "little"))
+    
+    def load(self, adr, value, size):
+        self.sock.sendall(b"\x33")
+        self.sock.sendall(size.to_bytes(1, 'little'))
+        self.sock.sendall(adr.to_bytes(8, 'little'))
+        self.sock.sendall(value.to_bytes(8, 'little', signed=True))
+
+    def store(self, adr, value, size):
+        self.sock.sendall(b"\x44")
+        self.sock.sendall(size.to_bytes(1, 'little'))
+        self.sock.sendall(adr.to_bytes(8, 'little'))
+        self.sock.sendall(value.to_bytes(8, 'little', signed=True))
+        
         
 
 
@@ -160,14 +173,14 @@ def code(ql: Qiling, address, size):
 
 def mem_read(ql, access, adr, size, value):
     assert size in [0x1, 0x2, 0x4, 0x8]
-    # print(f"read at {adr:#x} {size=:#x}")
-    pass
+    # print(f"READ at {adr:#x} {size=:#x}, {value=:#x}")
+    ser.load(adr, value, size)
 
 
 def mem_write(ql, access, adr, size, value):
     assert size in [0x1, 0x2, 0x4, 0x8]
     # print(f"WRITE at {adr:#x} {size=:#x}, {value=:#x}")
-    pass
+    ser.store(adr, value, size)
 
 
 def inter(ql, a):
@@ -190,10 +203,13 @@ def run(rootfs, argv):
         file = img.encode()
         ser.libload(file, start, end)
 
+    # ql.hook_code(code): 14s
+    # ql.hook_code(None): 0.1s
+
     ql.hook_code(code)
     ql.hook_mem_read(mem_read)
     ql.hook_mem_write(mem_write)
-    ql.hook_intr(inter)
+    #ql.hook_intr(inter)
     ql.run()
 
 
