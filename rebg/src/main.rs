@@ -5,8 +5,8 @@ use rebg::host::native::{Native, NativeArgs};
 use rebg::serve;
 use rebg::state::{Aarch64Step, Step, X64Step};
 use rebg::tracer::parser::{GenericParser, Message};
-use rebg::tracer::TracerCmd;
 use rebg::tracer::qiling::Qiling;
+use rebg::tracer::TracerCmd;
 use rebg::{
     arch::Arch,
     host::Host,
@@ -137,7 +137,7 @@ fn main() {
                 );
             }
             TraceTypes::Qiling => {
-                let qiling = Qiling{};
+                let qiling = Qiling {};
                 analyze_arch::<Aarch64Step, Qiling, 32>(
                     &dumper,
                     quit,
@@ -146,14 +146,31 @@ fn main() {
                     target_arch,
                     &program,
                 );
-            },
+            }
         },
         Arch::X86_64 => match tracer {
             TraceTypes::Qemu => {
                 let qemu = QEMU {};
-                analyze_arch::<X64Step, QEMU, 16>(&dumper, quit, &launcher, qemu, target_arch, &program);
+                analyze_arch::<X64Step, QEMU, 16>(
+                    &dumper,
+                    quit,
+                    &launcher,
+                    qemu,
+                    target_arch,
+                    &program,
+                );
             }
-            TraceTypes::Qiling => todo!(),
+            TraceTypes::Qiling => {
+                let qiling = Qiling {};
+                analyze_arch::<X64Step, Qiling, 16>(
+                    &dumper,
+                    quit,
+                    &launcher,
+                    qiling,
+                    target_arch,
+                    &program,
+                );
+            }
         },
     }
 }

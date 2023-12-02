@@ -75,7 +75,7 @@ class Arch(Enum):
     def flags_reg(self):
         if self == self.ARM64:
             return arm64_const.UC_ARM64_REG_NZCV
-        elif self == self.X86_REGS:
+        elif self == self.X8664:
             return x86_const.UC_X86_REG_FLAGS
         else:
             raise Exception("what u doin")
@@ -83,7 +83,7 @@ class Arch(Enum):
     def regs(self):
         if self == self.ARM64:
             return ARM64_REGS
-        elif self == self.X86_REGS:
+        elif self == self.X8664:
             return X86_REGS
         else:
             raise Exception("what u doin")
