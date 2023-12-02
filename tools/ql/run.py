@@ -205,7 +205,7 @@ def run(rootfs, argv):
 
     # simplification of reality
     bin_low = min([start for start, _ in binary_offsets])
-    bin_high = min([end for _, end in binary_offsets])
+    bin_high = max([end for _, end in binary_offsets])
 
     for start, end, perm, label, img in ql.mem.get_mapinfo():
         if len(img) == 0:
