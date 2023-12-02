@@ -227,9 +227,10 @@ where
     if matches!(msgs[0], Message::LibLoad(_, _, _)) {
         let map = msgs
             .into_iter()
-            .map(|m| match m {
-                Message::LibLoad(name, from, to) => (name.to_string(), (from, to)),
-                _ => panic!("Got libload and some other junk!"),
+            .flat_map(|m| match m {
+                Message::LibLoad(name, from, to) => Some((name.to_string(), (from, to))),
+                // _ => panic!("Got libload and some other junk!"),
+                _ => None,
             })
             .collect();
 

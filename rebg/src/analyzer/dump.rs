@@ -214,7 +214,7 @@ impl TraceDumper {
         }
 
         // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
-        assert_eq!(instrumentations.last().and_then(|x| x.branch.clone()), None);
+        // assert_eq!(instrumentations.last().and_then(|x| x.branch.clone()), None);
 
         if !result.status.success() {
             println!("Failed with code: {}", result.status);

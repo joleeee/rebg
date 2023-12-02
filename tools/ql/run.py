@@ -5,6 +5,7 @@ from qiling.const import QL_ARCH
 from qiling.os.mapper import QlFsMappedObject
 from typing import List
 from pprint import pprint
+import os
 
 # from capstone import *
 from unicorn import x86_const, arm64_const
@@ -129,7 +130,6 @@ class Serializer:
         self.sock.sendall(len(name).to_bytes(8, "little"))
         self.sock.sendall(name)
         self.sock.sendall(len(content).to_bytes(8, "little"))
-        print(f"len >> {len(content)} <<")
         self.sock.sendall(content)
         self.sock.sendall(fr.to_bytes(8, "little"))
         self.sock.sendall(to.to_bytes(8, "little"))
@@ -197,20 +197,31 @@ def run(rootfs, argv):
     global arch
     arch = Arch(ql.arch.type)
 
+    realpath_bin = os.path.realpath(argv[0])
+
+    binary_offsets = [(start, end) for start, end, _ ,_, img in ql.mem.get_mapinfo() if realpath_bin == img]
+
+    # simplification of reality
+    bin_low = min([start for start, _ in binary_offsets])
+    bin_high = min([end for _, end in binary_offsets])
+
     for start, end, perm, label, img in ql.mem.get_mapinfo():
         if len(img) == 0:
             continue
+
         file = img.encode()
         ser.libload(file, start, end)
+    
+    #ql.run(end=0x400000)
+    #snap = ql.save()
+    #ql.restore(snap)
 
-    # ql.hook_code(code): 14s
-    # ql.hook_code(None): 0.1s
 
-    ql.hook_code(code)
+    ql.hook_code(code, begin=bin_low, end=bin_high)
     ql.hook_mem_read(mem_read)
     ql.hook_mem_write(mem_write)
-    #ql.hook_intr(inter)
-    ql.run()
+
+    ql.os.run()
 
 
 if __name__ == "__main__":
