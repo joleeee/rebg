@@ -117,14 +117,14 @@ class Serializer:
         self.sock.sendall(pc.to_bytes(8, "little"))
         for r in regs:
             self.sock.sendall(r.to_bytes(8, "little"))
-   
+
     def libload(self, name: bytes, fr: int, to: int):
         self.sock.sendall(b"\xee")
         self.sock.sendall(len(name).to_bytes(8, "little"))
         self.sock.sendall(name)
         self.sock.sendall(fr.to_bytes(8, "little"))
         self.sock.sendall(to.to_bytes(8, "little"))
-    
+
     def libload_bin(self, name: bytes, content: bytes, fr: int, to: int):
         self.sock.sendall(b"\xef")
         self.sock.sendall(len(name).to_bytes(8, "little"))
@@ -133,20 +133,18 @@ class Serializer:
         self.sock.sendall(content)
         self.sock.sendall(fr.to_bytes(8, "little"))
         self.sock.sendall(to.to_bytes(8, "little"))
-    
+
     def load(self, adr, value, size):
         self.sock.sendall(b"\x33")
-        self.sock.sendall(size.to_bytes(1, 'little'))
-        self.sock.sendall(adr.to_bytes(8, 'little'))
-        self.sock.sendall(value.to_bytes(8, 'little', signed=True))
+        self.sock.sendall(size.to_bytes(1, "little"))
+        self.sock.sendall(adr.to_bytes(8, "little"))
+        self.sock.sendall(value.to_bytes(8, "little", signed=True))
 
     def store(self, adr, value, size):
         self.sock.sendall(b"\x44")
-        self.sock.sendall(size.to_bytes(1, 'little'))
-        self.sock.sendall(adr.to_bytes(8, 'little'))
-        self.sock.sendall(value.to_bytes(8, 'little', signed=True))
-        
-        
+        self.sock.sendall(size.to_bytes(1, "little"))
+        self.sock.sendall(adr.to_bytes(8, "little"))
+        self.sock.sendall(value.to_bytes(8, "little", signed=True))
 
 
 ser = Serializer()
@@ -199,7 +197,11 @@ def run(rootfs, argv):
 
     realpath_bin = os.path.realpath(argv[0])
 
-    binary_offsets = [(start, end) for start, end, _ ,_, img in ql.mem.get_mapinfo() if realpath_bin == img]
+    binary_offsets = [
+        (start, end)
+        for start, end, _, _, img in ql.mem.get_mapinfo()
+        if realpath_bin == img
+    ]
 
     # simplification of reality
     bin_low = min([start for start, _ in binary_offsets])
@@ -211,11 +213,10 @@ def run(rootfs, argv):
 
         file = img.encode()
         ser.libload(file, start, end)
-    
-    #ql.run(end=0x400000)
-    #snap = ql.save()
-    #ql.restore(snap)
 
+    # ql.run(end=0x400000)
+    # snap = ql.save()
+    # ql.restore(snap)
 
     ql.hook_code(code, begin=bin_low, end=bin_high)
     ql.hook_mem_read(mem_read)
