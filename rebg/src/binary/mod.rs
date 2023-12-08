@@ -1,3 +1,4 @@
+use object::{elf, read::elf::FileHeader, Endianness, Object, ObjectSection};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
@@ -52,21 +53,23 @@ where
 {
     #[error("launcher")]
     Launcher(LAUNCHERERR),
-    #[error("goblin")]
-    Goblin(#[from] goblin::error::Error),
+    #[error("object")]
+    Object(#[from] object::Error),
 }
 
 pub struct Binary<'a> {
     #[allow(dead_code)]
     raw: box_ptr::BoxData,
-    elf: goblin::elf::Elf<'a>,
+    obj: object::File<'a>,
+    header: elf::FileHeader64<Endianness>,
 }
 
 impl<'a> Binary<'a> {
-    pub fn from_bytes(bytes: Box<[u8]>) -> Result<Binary<'a>, goblin::error::Error> {
+    pub fn from_bytes(bytes: Box<[u8]>) -> Result<Binary<'a>, object::Error> {
         let raw = BoxData::from_box(bytes);
-        let elf = goblin::elf::Elf::parse(unsafe { &*raw.as_ptr() })?;
-        Ok(Binary { raw, elf })
+        let obj = object::File::parse(unsafe { &*raw.as_ptr() })?;
+        let header = elf::FileHeader64::<Endianness>::parse(unsafe { &*raw.as_ptr() })?.to_owned();
+        Ok(Binary { raw, obj, header })
     }
 
     /// Reads and parses the binary
@@ -110,7 +113,7 @@ impl<'a> Binary<'a> {
             let bin = Self::from_path(launcher, &PathBuf::from(&debug_sym_path));
 
             if let Ok(bin) = bin {
-                let bin_arch = Arch::from_elf(bin.elf().header.e_machine).ok();
+                let bin_arch = Arch::from_object(bin.obj.architecture()).ok();
 
                 if bin_arch != Some(arch) {
                     debug!("wrong arch {:?}", bin_arch);
@@ -127,23 +130,28 @@ impl<'a> Binary<'a> {
     }
 
     pub fn build_id(&self) -> Option<String> {
-        let buildid = self
-            .elf
-            .section_headers
-            .iter()
-            .find(|s| self.elf.shdr_strtab.get_at(s.sh_name) == Some(".note.gnu.build-id"))?;
+        let id = self
+            .obj
+            .section_by_name(".note.gnu.build-id")?
+            .data()
+            .ok()?;
 
-        let buildid = {
-            let id = &self.raw.as_slice()[buildid.file_range()?];
-            // only use the last 20 bytes!!
-            let id = &id[id.len() - 20..];
-            hex::encode(id)
-        };
+        // only use the last 20 bytes!!
+        let id = &id[id.len() - 20..];
+        let id = hex::encode(id);
 
-        Some(buildid)
+        Some(id)
     }
 
-    pub fn elf(&self) -> &goblin::elf::Elf {
-        &self.elf
+    pub fn obj(&self) -> &object::File {
+        &self.obj
+    }
+
+    pub fn header(&self) -> &elf::FileHeader64<Endianness> {
+        &self.header
+    }
+
+    pub fn raw(&self) -> &[u8] {
+        self.raw.as_slice()
     }
 }

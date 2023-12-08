@@ -16,11 +16,11 @@ capstone = { git = "https://github.com/joleeee/capstone-rs.git", rev = "a496259d
 convert_case = "0.6.0"
 flume = "0.10.14"
 futures = "0.3.28"
-goblin = "0.6.1"
 hex = "0.4.3"
 itertools = "0.11.0"
 lazy_static = "1.4.0"
 num-traits = "0.2.15"
+object = { version = "0.32.1" }
 oneshot = "0.1.5"
 regex = "1.8.3"
 serde = "1.0.188"

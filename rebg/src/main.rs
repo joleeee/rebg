@@ -1,3 +1,4 @@
+use object::Object;
 use rebg::analyzer::dump::TraceDumper;
 use rebg::binary::Binary;
 use rebg::host::docker::{Docker, DockerArgs};
@@ -103,7 +104,7 @@ fn main() {
         Binary::from_bytes(buffer.into_boxed_slice()).unwrap()
     };
     let target_arch =
-        target_arch.unwrap_or_else(|| Arch::from_elf(bin.elf().header.e_machine).unwrap());
+        target_arch.unwrap_or_else(|| Arch::from_object(bin.obj().architecture()).unwrap());
 
     let qemu = QEMU {};
 
