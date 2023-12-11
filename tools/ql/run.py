@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from qiling import Qiling
-from qiling.const import QL_ARCH
+from qiling.const import QL_ARCH, QL_INTERCEPT
 from qiling.os.mapper import QlFsMappedObject
 from typing import List
 from pprint import pprint
@@ -145,6 +145,11 @@ class Serializer:
         self.sock.sendall(size.to_bytes(1, "little"))
         self.sock.sendall(adr.to_bytes(8, "little"))
         self.sock.sendall(value.to_bytes(8, "little", signed=True))
+    
+    def syscall(self, data: bytes):
+        self.sock.sendall(b"\x99")
+        self.sock.sendall(len(data).to_bytes(8, "little"))
+        self.sock.sendall(data)
 
 
 ser = Serializer()
@@ -188,6 +193,47 @@ def inter(ql, a):
 
 arch = None
 
+def sys_openat(ql, fd, path, flags, mode, ret):
+    path = ql.mem.string(path)
+    syscall = f'openat(0x{fd:x}, "{path}", 0x{flags:x}, 0x{mode:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_new_fstatat(ql, fd, path, buf, flags, ret):
+    path = ql.mem.string(path)
+    syscall = f'new_fstatat(0x{fd:x}, "{path}", 0x{buf:x}, 0x{flags:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_read(ql, fd, buf, count, ret):
+    syscall = f'read(0x{fd:x}, 0x{buf:x}, 0x{count:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_write(ql, fd, buf, count, ret):
+    syscall = f'write(0x{fd:x}, 0x{buf:x}, 0x{count:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_brk(ql, address, ret):
+    syscall = f'brk(0x{address:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_exit_group(ql, status, ret):
+    syscall = f'exit_group({status}) = {ret}'
+    ser.syscall(syscall.encode())
+
+def sys_close(ql, fd, ret):
+    syscall = f'close({fd}) = {ret}'
+    ser.syscall(syscall.encode())
+
+def sys_mmap(ql, addr, length, prot, flags, fd, offset, ret):
+    syscall = f'mmap(0x{addr:x}, 0x{length:x}, 0x{prot:x}, 0x{flags:x}, {fd}, 0x{offset:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_uname(ql, buf, ret):
+    syscall = f'uname(0x{buf:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
+
+def sys_mprotect(ql, addr, len, prot, ret):
+    syscall = f'mprotect(0x{addr:x}, 0x{len:x}, 0x{prot:x}) = 0x{ret:x}'
+    ser.syscall(syscall.encode())
 
 def run(rootfs, argv):
     ql = Qiling(argv, rootfs)
@@ -221,6 +267,20 @@ def run(rootfs, argv):
     ql.hook_code(code, begin=bin_low, end=bin_high)
     ql.hook_mem_read(mem_read)
     ql.hook_mem_write(mem_write)
+
+    # TODO find a nice way to do all of the syscalls
+    for (name, func) in [
+        ("brk", sys_brk),
+        ("exit_group", sys_exit_group),
+        ("close", sys_close),
+        ("mmap", sys_mmap),
+        ("uname", sys_uname),
+        ("mprotect", sys_mprotect),
+        ("openat", sys_openat),
+        ("read", sys_read),
+        ("write", sys_write),
+    ]:
+        ql.os.set_syscall(name, func, QL_INTERCEPT.EXIT)
 
     ql.os.run()
 
