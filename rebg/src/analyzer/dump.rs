@@ -97,7 +97,7 @@ impl TraceDumper {
             };
 
             match v {
-                ParsedStep::LibLoad(_) /*| ParsedStep::LibLoadBin(_)*/ => panic!("Unexpected libload"),
+                ParsedStep::LibLoad(_) => panic!("Unexpected libload"),
                 ParsedStep::TraceStep(step) => {
                     trace.push(step);
                 }
@@ -213,7 +213,7 @@ impl TraceDumper {
             bt_lens.push(bt.len());
         }
 
-        // should never be the case, but we COULD end up with an unprocessed instrumentation here if the last step added a instrumentation
+        // last instruction can be a RET now that we allow tracing only main part of program.
         // assert_eq!(instrumentations.last().and_then(|x| x.branch.clone()), None);
 
         if !result.status.success() {

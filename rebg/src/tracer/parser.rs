@@ -237,18 +237,6 @@ where
         return Some(ParsedStep::LibLoad(map));
     }
 
-    // if matches!(msgs[0], Message::LibLoadBin(_, _, _, _)) {
-    //     let map = msgs
-    //         .into_iter()
-    //         .map(|m| match m {
-    //             Message::LibLoadBin(name, cont, from, to) => (name.to_string(), (cont, from, to)),
-    //             _ => panic!("Got libload and some other junk!"),
-    //         })
-    //         .collect();
-
-    //     return Some(ParsedStep::LibLoadBin(map));
-    // }
-
     // otherwise, it's just a step :)
 
     let s = STEP::try_from(&msgs).unwrap();
