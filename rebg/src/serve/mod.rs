@@ -61,7 +61,7 @@ fn handle<STEP, const N: usize>(
         .zip(instrumentations.iter())
         .zip(bt_lens);
 
-    let chunked = iter.chunks(100);
+    let chunked = iter.chunks(1000);
 
     for chunk in &chunked {
         let mut parts = Vec::new();
