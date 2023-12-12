@@ -11,7 +11,7 @@ pub use x64::{X64Flags, X64State, X64Step};
 use crate::{
     arch::Arch,
     dis::{self},
-    tracer::qemu::{Message, RegisterMessage},
+    tracer::parser::{Message, RegisterMessage},
 };
 
 /// A single step in the trace.
@@ -184,9 +184,10 @@ where
                 }
                 Message::Syscall(s) => strace = Some(s.to_string()),
                 Message::SyscallResult(s) => strace_result = Some(s.to_string()),
-
-                Message::LibLoad(_, _, _) | Message::Separator => panic!("really shouldnt happen"),
                 Message::Debug(_) => {}
+                Message::LibLoad(_, _, _) | Message::Separator => {
+                    panic!("really shouldnt happen: {:x?}", m)
+                }
             }
         }
 

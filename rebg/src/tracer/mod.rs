@@ -1,14 +1,16 @@
 use crate::{arch::Arch, state::Step};
-use std::{collections::HashMap, marker::PhantomData, path::Path, process::Child};
+use std::{marker::PhantomData, path::Path, process::Child};
 
+pub mod parser;
 pub mod qemu;
+pub mod qiling;
 
 #[derive(Debug)]
 pub enum ParsedStep<STEP, const N: usize>
 where
     STEP: Step<N>,
 {
-    LibLoad(HashMap<String, (u64, u64)>),
+    LibLoad(Vec<(String, (u64, u64))>),
     TraceStep(STEP),
     // TODO could handle this ourselves? esp when we have iterator?
     Final(std::process::Output),

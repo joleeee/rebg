@@ -5,7 +5,7 @@ use crate::{
         groups::Group,
         regs::{Reg, X64Reg},
     },
-    tracer::qemu::{Message, RegisterMessage},
+    tracer::parser::{Message, RegisterMessage},
 };
 
 use super::{Branching, GenericState, GenericStep, Instrument, MemoryOp, State, Step};
@@ -236,7 +236,7 @@ impl Instrument for X64Instrument {
 #[cfg(test)]
 mod tests {
     use super::X64State;
-    use crate::{state::X64Flags, tracer::qemu::RegisterMessage};
+    use crate::{state::X64Flags, tracer::parser::RegisterMessage};
 
     #[test]
     fn aarch64_state_deser() {
