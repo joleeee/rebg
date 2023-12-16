@@ -148,6 +148,6 @@ impl<'a> Binary<'a> {
     }
 
     pub fn bin(&self) -> &[u8] {
-        &self.raw.as_slice()
+        self.raw.as_slice()
     }
 }

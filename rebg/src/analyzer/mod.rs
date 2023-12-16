@@ -1,8 +1,9 @@
 pub mod dump;
 use crate::{
     dis::Instruction,
+    mem::HistMem,
     state::{Instrumentation, Step},
-    syms::SymbolTable, mem::HistMem,
+    syms::SymbolTable,
 };
 use std::fmt;
 

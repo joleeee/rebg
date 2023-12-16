@@ -187,7 +187,7 @@ fn analyze_arch<STEP, TRACER, const N: usize>(
     STEP: for<'a> TryFrom<&'a [Message], Error = anyhow::Error>,
     TRACER: Tracer<STEP, N, ITER = GenericParser<STEP, N>>,
 {
-    let parser = launch_qemu::<_, _, STEP, N>(launcher, tracer, target_arch, &program);
+    let parser = launch_qemu::<_, _, STEP, N>(launcher, tracer, target_arch, program);
     let analysis = dumper.analyze::<_, _, QEMU, _, N>(launcher, parser, target_arch);
     if !quit {
         serve::ws(analysis, target_arch);
@@ -210,7 +210,7 @@ where
 
     let child = launcher
         .launch(&cmd.program, cmd.args)
-        .expect(&format!("Failed launching '{}'", cmd.program));
+        .unwrap_or_else(|_| panic!("Failed launching '{}'", cmd.program));
 
     tracer.parse(child)
 }

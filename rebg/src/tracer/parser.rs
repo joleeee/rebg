@@ -174,7 +174,7 @@ pub enum Message {
     Store(u64, u64, u8),
     Syscall(Box<str>),
     SyscallResult(Box<str>),
-    Debug(Box<str>)
+    Debug(Box<str>),
 }
 
 #[derive(Clone, Debug)]

@@ -85,13 +85,7 @@ fn handle<STEP, const N: usize>(
     let strace: Vec<_> = trace
         .iter()
         .enumerate()
-        .filter_map(|(i, step)| {
-            if let Some(strace) = step.strace() {
-                Some((i, strace))
-            } else {
-                None
-            }
-        })
+        .filter_map(|(i, step)| step.strace().map(|strace| (i, strace)))
         .map(|(i, s)| json!([i, s]))
         .collect();
     let strace = serde_json::to_string(&json!({"strace": strace})).unwrap();
