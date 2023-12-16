@@ -37,6 +37,8 @@ where
 #[serde(rename_all = "snake_case")]
 enum RebgRequest {
     Registers(u64),
+    // (from, count, tick)
+    Memory(u64, u8, u32),
 }
 
 fn handle<STEP, const N: usize>(
@@ -52,6 +54,7 @@ fn handle<STEP, const N: usize>(
         instrumentations,
         bt_lens,
         table,
+        mem,
     } = analysis;
 
     // first send all addresses etc
@@ -82,13 +85,7 @@ fn handle<STEP, const N: usize>(
     let strace: Vec<_> = trace
         .iter()
         .enumerate()
-        .filter_map(|(i, step)| {
-            if let Some(strace) = step.strace() {
-                Some((i, strace))
-            } else {
-                None
-            }
-        })
+        .filter_map(|(i, step)| step.strace().map(|strace| (i, strace)))
         .map(|(i, s)| json!([i, s]))
         .collect();
     let strace = serde_json::to_string(&json!({"strace": strace})).unwrap();
@@ -162,6 +159,27 @@ fn handle<STEP, const N: usize>(
                     serde_json::to_string(&json!({"registers": {"idx": idx, "registers": pairs}, "mem_ops": {"r": mem_reads, "w": mem_writes}}))
                         .unwrap();
 
+                ws.send(tungstenite::Message::Text(serialized)).unwrap();
+            }
+            RebgRequest::Memory(from, cnt, tick) => {
+                let mut output = Vec::new();
+
+                for offset in 0..cnt {
+                    let base = from + offset as u64 * 8;
+
+                    let chunk: Vec<_> = (base..base + 8)
+                        .map(|adr| {
+                            if let Some(value) = mem.load8(tick, adr) {
+                                format!("{:02x}", value)
+                            } else {
+                                String::from("??")
+                            }
+                        })
+                        .collect();
+
+                    output.push((base, chunk))
+                }
+                let serialized = serde_json::to_string(&json!({"memory": output})).unwrap();
                 ws.send(tungstenite::Message::Text(serialized)).unwrap();
             }
         }

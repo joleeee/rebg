@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher } from "svelte";
     import { rwCssEntry } from "./color";
+    import { selectedAddress } from "./stores";
     const dispatch = createEventDispatcher();
 
     export let name, value, mod;
@@ -11,6 +12,7 @@
 
     function click() {
         dispatch("selected", { name: name, value: value });
+        selectedAddress.set(value);
     }
 </script>
 

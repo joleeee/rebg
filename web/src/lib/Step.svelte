@@ -17,7 +17,7 @@
 
     function click() {
         dispatch("selected", { index: idx, address: adr });
-        selectedAddress.set(adr);
+        // selectedAddress.set(adr);
         selectedIdx.set(idx);
     }
 

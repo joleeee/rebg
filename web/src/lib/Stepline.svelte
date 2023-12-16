@@ -165,7 +165,13 @@
     selectedIdx.subscribe((i) => (selected_idx = i));
     $: if (selected_idx != null && connected) {
         sendStore.set(JSON.stringify({ registers: selected_idx }));
+        const COUNT = 12;
+        let from = Math.max(0, selected_adr - (COUNT/2)*8);
+        sendStore.set(JSON.stringify({ memory: [from, COUNT, selected_idx] }));
     }
+
+    let selected_adr = null;
+    selectedAddress.subscribe((a) => (selected_adr = a));
 
     function step_selected(step) {
         selected_idx = step.detail.index;
@@ -271,14 +277,14 @@
             }
             // hacky af
             selectedIdx.set(selected_idx);
-            selectedAddress.set(step[2]);
+            // selectedAddress.set(step[2]);
         }
     }
 </script>
 
-<svelte:window on:keypress={key_press} />
-
-<div class="outer">
+<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="outer" on:keypress={key_press} tabindex="0">
     {#each steps as step}
         <Step
             on:selected={step_selected}

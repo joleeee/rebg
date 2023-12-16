@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MCell {
     values: Vec<(u32, u8)>,
 }
@@ -43,6 +43,7 @@ impl MCell {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct HistMem {
     // ptr -> value
     cells: HashMap<u64, MCell>,
