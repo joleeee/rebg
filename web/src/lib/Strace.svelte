@@ -14,7 +14,6 @@
 
     function click() {
         selectedIdx.set(tick);
-        selectedAddress.set(-1);
         sendStore.set(JSON.stringify({ registers: tick }));
     }
 </script>
