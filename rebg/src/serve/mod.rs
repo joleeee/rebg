@@ -173,17 +173,16 @@ fn handle<STEP, const N: usize>(
                 for offset in 0..cnt {
                     let base = from + offset as u64 * 8;
 
-                    let chunk: Vec<_> = (base..base+8).map(|adr| if let Some(value) = mem.load8(tick, adr) {
-                        format!("{:02x}", value)
-                    } else {
-                        String::from("??")
-                    }).collect();
-                    // let value = if let Some(value) = mem.load64(tick, adr) {
-                    //     format!("{:032x}", value)
-                    // } else {
-                    //     String::from("?")
-                    // };
-                    // output.push((adr, value));
+                    let chunk: Vec<_> = (base..base + 8)
+                        .map(|adr| {
+                            if let Some(value) = mem.load8(tick, adr) {
+                                format!("{:02x}", value)
+                            } else {
+                                String::from("??")
+                            }
+                        })
+                        .collect();
+
                     output.push((base, chunk))
                 }
                 let serialized = serde_json::to_string(&json!({"memory": output})).unwrap();
