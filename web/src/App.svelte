@@ -6,7 +6,7 @@
   import Straceline from "./lib/Straceline.svelte";
 </script>
 
-<div class="timeline"><div class="padder">some list here</div></div>
+<!-- <div class="timeline"><div class="padder">some list here</div></div> -->
 <div class="middle">
   <div class="stepline"><div class="padder"><Stepline /></div></div>
   <div class="memory"><div class="padder"><Memory /></div></div>
