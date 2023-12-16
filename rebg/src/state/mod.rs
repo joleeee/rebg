@@ -2,6 +2,7 @@ use core::fmt;
 
 use bitflags::Flags;
 use num_traits::Num;
+use tracing::debug;
 
 pub mod aarch64;
 pub use aarch64::{Aarch64Flags, Aarch64State, Aarch64Step};
@@ -184,7 +185,9 @@ where
                 }
                 Message::Syscall(s) => strace = Some(s.to_string()),
                 Message::SyscallResult(s) => strace_result = Some(s.to_string()),
-                Message::Debug(_) => {}
+                Message::Debug(m) => {
+                    debug!("Debug message: {}", m)
+                }
                 Message::LibLoad(_, _, _) | Message::Separator => {
                     panic!("really shouldnt happen: {:x?}", m)
                 }
