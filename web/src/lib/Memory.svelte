@@ -67,7 +67,7 @@
 </div>
 
 <style>
-    div {
+    * {
         font-family: monospace;
     }
 </style>
