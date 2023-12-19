@@ -210,7 +210,7 @@ where
 
     let child = launcher
         .launch(&cmd.program, cmd.args)
-        .unwrap_or_else(|_| panic!("Failed launching '{}'", cmd.program));
+        .unwrap_or_else(|err| panic!("Failed launching '{}': {:?}", cmd.program, err));
 
     tracer.parse(child)
 }
