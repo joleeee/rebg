@@ -4,5 +4,6 @@
 
 *.so
 *.o
+*.cpython-*.pyc
 
 .DS_STORE
