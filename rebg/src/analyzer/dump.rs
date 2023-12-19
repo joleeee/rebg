@@ -12,6 +12,7 @@ use crate::{
     tracer::ParsedStep,
 };
 use lazy_static::lazy_static;
+use object::Object;
 use regex::Regex;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -64,15 +65,16 @@ impl TraceDumper {
         for (path, pie) in offsets {
             let binary = Binary::from_path(launcher, &PathBuf::from(path.clone())).unwrap();
 
-            let mut table = SymbolTable::from_elf(path.clone(), binary.elf());
+            let mut table = SymbolTable::from_elf(path.clone(), &binary);
 
-            if binary.elf().syms.is_empty() {
+            // no symbols
+            if binary.obj().symbols().next().is_none() {
                 let debug_binary = binary
                     .build_id()
                     .and_then(|id| Binary::try_from_buildid(launcher, &id, arch));
 
                 if let Some(debug_binary) = debug_binary {
-                    table = table.extend_with_debug(debug_binary.elf(), 0, pie.1 - pie.0);
+                    table = table.extend_with_debug(&debug_binary, 0, pie.1 - pie.0);
                 }
             }
 
@@ -479,9 +481,9 @@ where
                     let binary = Binary::from_path(launcher, Path::new(&path));
 
                     if let Ok(binary) = binary {
-                        let mut new_symbol_table = SymbolTable::from_elf(path, binary.elf());
+                        let mut new_symbol_table = SymbolTable::from_elf(path, &binary);
 
-                        if binary.elf().syms.is_empty() {
+                        if binary.obj().symbols().next().is_none() {
                             debug!("No symbols, trying to read debug symbols elsewhere. we have {} offsets", new_symbol_table.offsets.len());
 
                             let buildid = binary.build_id();
@@ -492,7 +494,7 @@ where
 
                                 if let Some(other_bin) = other_bin {
                                     new_symbol_table = new_symbol_table.extend_with_debug(
-                                        other_bin.elf(),
+                                        &other_bin,
                                         offset,
                                         offset + size,
                                     );

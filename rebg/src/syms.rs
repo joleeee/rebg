@@ -1,3 +1,5 @@
+use crate::binary::Binary;
+use object::{read::elf::FileHeader, Object, ObjectSymbol};
 use std::fmt::{Display, Formatter};
 use tracing::debug;
 
@@ -43,42 +45,48 @@ pub struct ProgramOffset {
 // https://developer.arm.com/documentation/100748/0620/Mapping-Code-and-Data-to-the-Target/Loading-armlink-generated-ELF-files-that-have-complex-scatter-files
 impl SymbolTable {
     /// The PT_LOAD headers
-    fn get_offsets(elf: &goblin::elf::Elf) -> Vec<ProgramOffset> {
-        elf.program_headers
+    fn get_offsets(bin: &Binary) -> Vec<ProgramOffset> {
+        let endian = bin.obj().endianness();
+
+        bin.header()
+            .program_headers(endian, bin.raw())
+            .unwrap()
             .iter()
-            .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
+            .filter(|ph| ph.p_type.get(endian) == object::elf::PT_LOAD)
             .map(|ph| ProgramOffset {
-                offset: ph.p_offset,
-                addr: ph.p_vaddr,
-                size: ph.p_memsz, // memsz is possibly bigger than filesz because it contains bss
-                                  // (default zeroed variables / data)
+                offset: ph.p_offset.get(endian),
+                addr: ph.p_vaddr.get(endian),
+                size: ph.p_memsz.get(endian), // memsz is possibly bigger than filesz because it contains bss
+                                              // (default zeroed variables / data)
             })
             .collect()
     }
 
-    pub fn intermediary_symbols(elf: &goblin::elf::Elf) -> Vec<(String, u64, u64)> {
-        elf.syms
-            .iter()
+    pub fn intermediary_symbols(bin: &Binary) -> Vec<(String, u64, u64)> {
+        bin.obj()
+            .symbols()
+            .into_iter()
             .map(|sym| {
-                let name = elf
-                    .strtab
-                    .get_at(sym.st_name)
-                    .expect("back to you, elf is sketchy");
-                let addr = sym.st_value;
-                let size = sym.st_size;
+                let name = sym.name().expect("back to you, elf is sketchy");
+                let addr = sym.address();
+                let size = sym.size();
                 (name.to_string(), addr, size)
             })
             .collect()
     }
 
     /// Extend an existing elf with more debug symbols
-    pub fn extend_with_debug(self, debug_elf: &goblin::elf::Elf, from: u64, to: u64) -> Self {
+    pub fn extend_with_debug(self, debug: &Binary, from: u64, to: u64) -> Self {
         // TODO support different vaddr and paddr
-        for ph in &debug_elf.program_headers {
+        for ph in debug
+            .header()
+            .program_headers(debug.obj().endianness(), debug.raw())
+            .expect("nope")
+        {
             assert_eq!(ph.p_vaddr, ph.p_paddr);
         }
 
-        let syms = Self::intermediary_symbols(debug_elf);
+        let syms = Self::intermediary_symbols(debug);
 
         for o in &self.offsets {
             debug!("offset: {:#x} {:#x}", o.addr, o.addr + o.size);
@@ -134,7 +142,7 @@ impl SymbolTable {
         Self { symbols, ..self }
     }
 
-    pub fn from_elf(path: String, elf: &goblin::elf::Elf) -> Self {
+    pub fn from_elf(path: String, elf: &Binary) -> Self {
         let offsets = Self::get_offsets(elf);
 
         let empty = Self {

@@ -1,4 +1,5 @@
 use capstone::{prelude::BuildsCapstone, Capstone};
+use object::Architecture;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Arch {
@@ -22,6 +23,14 @@ impl Arch {
             0xB7 => Ok(Arch::ARM64),
             0x3E => Ok(Arch::X86_64),
             _ => Err(anyhow::anyhow!("Unknown machine: {}", machine)),
+        }
+    }
+
+    pub fn from_object(architecture: Architecture) -> anyhow::Result<Self> {
+        match architecture {
+            Architecture::Aarch64 => Ok(Arch::ARM64),
+            Architecture::X86_64 =>  Ok(Arch::X86_64),
+            e => Err(anyhow::anyhow!("Unknown arch: {:?}", e)),
         }
     }
 
